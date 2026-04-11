@@ -40,7 +40,7 @@ CREATE TABLE invoices (
   invoice_number TEXT NOT NULL,
   issue_date DATE NOT NULL,
   due_date DATE NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('draft', 'paid')),
+  status TEXT NOT NULL CHECK (status IN ('draft', 'paid', 'partial')),
   subtotal NUMERIC(14, 2) NOT NULL DEFAULT 0,
   discount NUMERIC(14, 2) NOT NULL DEFAULT 0 CHECK (discount >= 0),
   total NUMERIC(14, 2) NOT NULL DEFAULT 0,
@@ -63,3 +63,16 @@ CREATE TABLE invoice_items (
 );
 
 CREATE INDEX idx_invoice_items_invoice_id ON invoice_items(invoice_id);
+
+CREATE TABLE payments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+  amount NUMERIC(14, 2) NOT NULL CHECK (amount > 0),
+  method TEXT NOT NULL DEFAULT 'cash'
+    CHECK (method IN ('cash', 'bank_transfer', 'upi', 'card', 'cheque', 'other')),
+  date DATE NOT NULL DEFAULT NOW(),
+  note TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_payments_invoice_id ON payments(invoice_id);

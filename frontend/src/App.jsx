@@ -1,132 +1,146 @@
 import React, { useState } from 'react';
-import { Routes, Route, Navigate, NavLink } from 'react-router-dom';
+import { Routes, Route, Navigate, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from './authContext';
+import { LayoutDashboard, Users, FileText, Package, Settings, Menu, LogOut } from 'lucide-react';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import Invoices from './pages/Invoices';
 import Customers from './pages/Customers';
 import Items from './pages/Items';
 import InvoiceBuilder from './pages/InvoiceBuilder';
 import InvoiceDetail from './pages/InvoiceDetail';
 import Profile from './pages/Profile';
 
-// Icons (inline SVG)
-const Icons = {
-  dashboard: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline>
-    </svg>
-  ),
-  customers: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-      <circle cx="9" cy="7" r="4"/>
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-    </svg>
-  ),
-  items: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
-    </svg>
-  ),
-  invoices: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline>
-    </svg>
-  ),
-  settings: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-    </svg>
-  ),
-  plus: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-    </svg>
-  )
-};
 
 function PrivateLayout({ children }) {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const nav = useNavigate();
   
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
+  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+
+  const getNavClass = ({ isActive }) => 
+    `flex flex-col items-center justify-center gap-1.5 rounded-xl px-2 py-3 text-xs font-medium transition-all duration-200 ` + 
+    (isActive 
+      ? 'bg-background shadow-sm border border-border text-primary' 
+      : 'text-muted-foreground hover:bg-black/5 hover:text-foreground');
+
   return (
-    <div className={`app-shell ${isSidebarOpen ? 'sidebar-is-open' : ''}`}>
-      {/* Top Navbar */}
-      <header className="topbar">
-        <div className="topbar-left">
-          <button 
-            type="button" 
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.1)', color: '#FFF', border: 'none', cursor: 'pointer' }}
-          >
-            <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="3" y1="12" x2="21" y2="12"></line>
-              <line x1="3" y1="6" x2="21" y2="6"></line>
-              <line x1="3" y1="18" x2="21" y2="18"></line>
-            </svg>
-          </button>
-          <div className="logo-mark">
-            <div className="logo-icon">P</div>
-            <span>PayFlux</span>
-          </div>
-        </div>
-
-        <div className="topbar-center">
-          <input type="text" className="search-input" placeholder="Quick Search..." />
-        </div>
-
-        <div className="topbar-right">
-          <NavLink to="/profile" className="user-profile-btn" style={{ textDecoration: 'none' }}>
-            <div className="user-avatar">
-              {/* Fallback to user email first letter */}
-              {user?.email?.charAt(0).toUpperCase()}
+    <div className="flex h-screen w-full bg-slate-50/50">
+      {/* Sidebar */}
+      <aside className={`${isSidebarOpen ? 'fixed inset-y-0 left-0 z-50 flex bg-secondary/40 backdrop-blur-md border-r border-border/50' : 'hidden'} lg:static lg:flex w-24 flex-col border-r bg-secondary/30 shrink-0 transition-all duration-200 ease-in-out`}>
+        {/* Logo */}
+        <div className="h-16 flex items-center justify-center pt-4 mb-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold text-xl shadow-sm ring-1 ring-primary/20">
+              P
             </div>
-            <div className="user-email-col">
-              <span className="user-brand">{user?.email?.split('@')[0] || 'User'}</span>
-              <span className="user-email-text">{user?.email}</span>
-            </div>
+        </div>
+        
+        {/* Nav items */}
+        <nav className="flex flex-col gap-2 p-3 flex-1 mt-4">
+          <NavLink to="/dashboard" className={getNavClass}>
+            <LayoutDashboard className="h-5 w-5 mb-0.5" />
+            Dashboard
+          </NavLink>
+          <NavLink to="/invoices" className={getNavClass}>
+            <FileText className="h-5 w-5 mb-0.5" />
+            Invoices
+          </NavLink>
+          <NavLink to="/customers" className={getNavClass}>
+            <Users className="h-5 w-5 mb-0.5" />
+            Customers
+          </NavLink>
+          <NavLink to="/items" className={getNavClass}>
+            <Package className="h-5 w-5 mb-0.5" />
+            Items
+          </NavLink>
+        </nav>
+        <div className="p-3 mb-2 mt-auto">
+          <NavLink to="/profile" className={getNavClass}>
+            <Settings className="h-5 w-5 mb-0.5" />
+            Settings
           </NavLink>
         </div>
-      </header>
+      </aside>
 
-      <div className="main-wrapper">
-        {/* Sidebar (floating pill of icons) */}
-        <aside className={`sidebar ${isSidebarOpen ? 'expanded' : ''}`}>
-          <NavLink to="/" end className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`} title="Dashboard">
-            {Icons.dashboard}
-            <span className="nav-link-text">Dashboard</span>
-          </NavLink>
-          <NavLink to="/invoices/new" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`} title="New Invoice">
-            {Icons.invoices}
-            <span className="nav-link-text">New Invoice</span>
-          </NavLink>
-          <NavLink to="/customers" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`} title="Customers">
-            {Icons.customers}
-            <span className="nav-link-text">Customers</span>
-          </NavLink>
-          <NavLink to="/items" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`} title="Items">
-            {Icons.items}
-            <span className="nav-link-text">Items</span>
-          </NavLink>
-
-          <div className="sidebar-footer">
-            <NavLink to="/profile" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`} title="Settings">
-              {Icons.settings}
-              <span className="nav-link-text">Settings</span>
-            </NavLink>
+      {/* Main Content + Header area */}
+      <div className="flex flex-1 flex-col overflow-hidden relative w-full">
+        {/* Mobile Sidebar overlay */}
+        {isSidebarOpen && (
+           <div className="fixed inset-0 z-40 bg-black/20 lg:hidden backdrop-blur-sm transition-opacity" onClick={toggleSidebar} />
+        )}
+        
+        {/* Top Navbar */}
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 md:px-6">
+          <div className="flex items-center gap-2 lg:hidden">
+            <button onClick={toggleSidebar} className="p-2 -ml-2 text-muted-foreground hover:text-foreground rounded-md transition-colors">
+              <Menu className="h-5 w-5" />
+            </button>
           </div>
-        </aside>
+          
+          <div className="flex-1 flex items-center lg:justify-start">
+            <span style={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.02em', background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(250, 80%, 55%))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>PayFlux</span>
+          </div>
 
-        {/* Main Content Area */}
-        <div className="main-content">
-          <div className="page-content">
+          <div className="flex items-center gap-4 ml-auto relative">
+            {isProfileMenuOpen && (
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setIsProfileMenuOpen(false)} 
+              />
+            )}
+            
+            <div className="relative z-50">
+              <button 
+                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                className="flex items-center gap-3 hover:bg-secondary/80 p-1.5 pr-4 rounded-full transition-colors border border-transparent hover:border-border/50 text-left"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold border border-primary/20">
+                  {(user?.first_name || user?.email || '?').charAt(0).toUpperCase()}
+                </div>
+                <div className="hidden sm:flex flex-col">
+                  <span className="text-sm font-semibold leading-none text-foreground">{user?.first_name ? `${user.first_name}${user.last_name ? ' ' + user.last_name : ''}` : (user?.email?.split('@')[0] || 'User')}</span>
+                  <span className="text-[10px] text-muted-foreground leading-snug mt-0.5 font-medium">Administrator</span>
+                </div>
+              </button>
+              
+              {isProfileMenuOpen && (
+                <div className="absolute right-0 top-full mt-2 w-48 rounded-md shadow-xl border bg-background z-[100] overflow-hidden flex flex-col">
+                  <button
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      nav('/profile');
+                    }}
+                    className="flex items-center w-full px-4 py-3 text-sm text-foreground hover:bg-secondary transition-colors"
+                  >
+                    <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
+                    Settings
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      logout();
+                    }}
+                    className="flex items-center w-full px-4 py-3 text-sm text-destructive hover:bg-destructive/10 transition-colors border-t"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 w-full">
+          <div className="mx-auto w-full max-w-[1400px]">
             {children}
           </div>
-        </div>
+        </main>
       </div>
     </div>
   );
@@ -136,17 +150,20 @@ export default function App() {
   const { isAuthenticated } = useAuth();
   return (
     <Routes>
-      <Route path="/login"    element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} />
-      <Route path="/register" element={isAuthenticated ? <Navigate to="/" replace /> : <Register />} />
+      <Route path="/login"    element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/register" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />} />
 
-      <Route path="/" element={<PrivateLayout><Dashboard /></PrivateLayout>} />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/dashboard" element={<PrivateLayout><Dashboard /></PrivateLayout>} />
+      <Route path="/invoices" element={<PrivateLayout><Invoices /></PrivateLayout>} />
+      <Route path="/invoices/create" element={<PrivateLayout><InvoiceBuilder /></PrivateLayout>} />
+      <Route path="/invoices/new" element={<Navigate to="/invoices/create" replace />} />
       <Route path="/customers" element={<PrivateLayout><Customers /></PrivateLayout>} />
       <Route path="/items" element={<PrivateLayout><Items /></PrivateLayout>} />
-      <Route path="/invoices/new" element={<PrivateLayout><InvoiceBuilder /></PrivateLayout>} />
       <Route path="/invoices/:id" element={<PrivateLayout><InvoiceDetail /></PrivateLayout>} />
       <Route path="/invoices/:id/edit" element={<PrivateLayout><InvoiceBuilder /></PrivateLayout>} />
       <Route path="/profile" element={<PrivateLayout><Profile /></PrivateLayout>} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 }

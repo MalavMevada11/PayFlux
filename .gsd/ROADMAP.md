@@ -59,3 +59,25 @@
 - Verify all 4 statuses render correctly
 - Verify PDF includes business info
 - Clean up any console errors
+
+---
+
+### Phase 5: Date Format Standardization (DD/MM/YYYY)
+**Status**: ✅ Complete
+**Objective**: Ensure all dates displayed anywhere in the app use the `DD/MM/YYYY` format consistently.
+**Depends on**: Phase 4
+
+**Tasks**:
+- [x] Extract shared `formatDate(iso)` utility to a common module (`frontend/src/utils/date.js`)
+- [x] `Invoices.jsx` — format `r.issue_date` and `r.due_date` in the table
+- [x] `InvoiceDetail.jsx` — format `inv.issue_date` and `inv.due_date` in header and info card
+- [x] `InvoiceDetail.jsx` — format `p.date` in payment history entries
+- [x] `InvoiceBuilder.jsx` — replace inline `formatDateForDisplay` with shared utility
+- [x] `invoiceController.js` — add `fmtDate()` helper; format dates in PDF template
+
+**Verification**:
+- All date columns in Invoices list show DD/MM/YYYY
+- InvoiceDetail header and info card show DD/MM/YYYY
+- Payment history dates show DD/MM/YYYY
+- PDF output shows DD/MM/YYYY for issue/due dates and payment dates
+- Date picker inputs remain in native ISO format (no change needed)

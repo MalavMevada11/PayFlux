@@ -46,3 +46,14 @@ export const updateProfile = (data) => api('/auth/profile', { method: 'PUT', bod
 export const uploadLogo = (logo) => api('/auth/profile/logo', { method: 'POST', body: { logo } });
 export const updateInvoiceStatus = (id, status) =>
   api(`/invoices/${id}`, { method: 'PUT', body: { status } });
+
+// ── Payments ──
+export const getPayments = (invoiceId) => api(`/invoices/${invoiceId}/payments`);
+export const addPayment = (invoiceId, data) =>
+  api(`/invoices/${invoiceId}/payments`, { method: 'POST', body: data });
+export const deletePayment = (invoiceId, paymentId) =>
+  api(`/invoices/${invoiceId}/payments/${paymentId}`, { method: 'DELETE' });
+
+// ── Analytics ──
+export const getDashboardAnalytics = (granularity = 'monthly') =>
+  api(`/analytics/dashboard?granularity=${granularity}`);

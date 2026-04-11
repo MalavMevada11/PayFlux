@@ -6,6 +6,7 @@ const router = express.Router();
 router.use(authMiddleware);
 router.post('/', invoice.create);
 router.get('/', invoice.list);
+router.get('/next-number', invoice.getNextNumber);
 router.get('/:id/pdf', invoice.pdf);
 router.get('/:id', invoice.getOne);
 router.put('/:id', invoice.update);

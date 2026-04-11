@@ -10,7 +10,7 @@ function signToken(userId) {
 }
 
 async function register(req, res) {
-  const { email, password } = req.body || {};
+  const { email, password, first_name, last_name } = req.body || {};
   if (!email || typeof email !== 'string' || !EMAIL_RE.test(email.trim())) {
     return res.status(400).json({ error: 'Valid email is required' });
   }
@@ -18,16 +18,18 @@ async function register(req, res) {
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
   }
   const normalized = email.trim().toLowerCase();
+  const fname = (typeof first_name === 'string' ? first_name.trim() : '');
+  const lname = (typeof last_name === 'string' ? last_name.trim() : '');
   const hash = await bcrypt.hash(password, 10);
   try {
     const stmt = db.prepare(
-      'INSERT INTO users (email, password) VALUES (?, ?) RETURNING id, email'
+      'INSERT INTO users (email, password, first_name, last_name) VALUES (?, ?, ?, ?) RETURNING id, email, first_name, last_name'
     );
-    const user = stmt.get(normalized, hash);
+    const user = stmt.get(normalized, hash, fname, lname);
     // Create empty settings row for the new user
     db.prepare('INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)').run(user.id);
     const token = signToken(user.id);
-    return res.status(201).json({ user: { id: user.id, email: user.email }, token });
+    return res.status(201).json({ user: { id: user.id, email: user.email, first_name: user.first_name, last_name: user.last_name }, token });
   } catch (err) {
     if (err.message && err.message.includes('UNIQUE')) {
       return res.status(409).json({ error: 'Email already registered' });
@@ -43,7 +45,7 @@ async function login(req, res) {
     return res.status(400).json({ error: 'Email and password are required' });
   }
   const normalized = email.trim().toLowerCase();
-  const user = db.prepare('SELECT id, email, password FROM users WHERE email = ?').get(normalized);
+  const user = db.prepare('SELECT id, email, password, first_name, last_name FROM users WHERE email = ?').get(normalized);
   if (!user) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
@@ -52,7 +54,7 @@ async function login(req, res) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
   const token = signToken(user.id);
-  return res.json({ user: { id: user.id, email: user.email }, token });
+  return res.json({ user: { id: user.id, email: user.email, first_name: user.first_name, last_name: user.last_name }, token });
 }
 
 function getProfile(req, res) {
@@ -68,22 +70,64 @@ function getProfile(req, res) {
 }
 
 function updateProfile(req, res) {
-  const { business_name, business_address, gstin, phone } = req.body || {};
+  const { 
+    business_name, 
+    business_address, 
+    gstin, 
+    phone,
+    invoice_generation_type,
+    invoice_prefix,
+    invoice_postfix,
+    bank_account_name,
+    bank_account_number,
+    bank_ifsc,
+    bank_name,
+    bank_branch,
+    upi_id,
+    upi_qr
+  } = req.body || {};
+
   db.prepare(`
-    INSERT INTO user_settings (user_id, business_name, business_address, gstin, phone, updated_at)
-    VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+    INSERT INTO user_settings (
+      user_id, business_name, business_address, gstin, phone, 
+      invoice_generation_type, invoice_prefix, invoice_postfix,
+      bank_account_name, bank_account_number, bank_ifsc, bank_name, bank_branch,
+      upi_id, upi_qr,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
     ON CONFLICT(user_id) DO UPDATE SET
-      business_name    = excluded.business_name,
-      business_address = excluded.business_address,
-      gstin            = excluded.gstin,
-      phone            = excluded.phone,
-      updated_at       = excluded.updated_at
+      business_name           = excluded.business_name,
+      business_address        = excluded.business_address,
+      gstin                   = excluded.gstin,
+      phone                   = excluded.phone,
+      invoice_generation_type = excluded.invoice_generation_type,
+      invoice_prefix          = excluded.invoice_prefix,
+      invoice_postfix         = excluded.invoice_postfix,
+      bank_account_name       = excluded.bank_account_name,
+      bank_account_number     = excluded.bank_account_number,
+      bank_ifsc               = excluded.bank_ifsc,
+      bank_name               = excluded.bank_name,
+      bank_branch             = excluded.bank_branch,
+      upi_id                  = excluded.upi_id,
+      upi_qr                  = excluded.upi_qr,
+      updated_at              = excluded.updated_at
   `).run(
     req.userId,
     typeof business_name === 'string' ? business_name.trim() : '',
     typeof business_address === 'string' ? business_address.trim() : '',
     typeof gstin === 'string' ? gstin.trim() : '',
-    typeof phone === 'string' ? phone.trim() : ''
+    typeof phone === 'string' ? phone.trim() : '',
+    typeof invoice_generation_type === 'string' && ['sequential', 'manual'].includes(invoice_generation_type) ? invoice_generation_type : 'sequential',
+    typeof invoice_prefix === 'string' ? invoice_prefix : 'INV-',
+    typeof invoice_postfix === 'string' ? invoice_postfix : '',
+    typeof bank_account_name === 'string' ? bank_account_name.trim() : '',
+    typeof bank_account_number === 'string' ? bank_account_number.trim() : '',
+    typeof bank_ifsc === 'string' ? bank_ifsc.trim().toUpperCase() : '',
+    typeof bank_name === 'string' ? bank_name.trim() : '',
+    typeof bank_branch === 'string' ? bank_branch.trim() : '',
+    typeof upi_id === 'string' ? upi_id.trim() : '',
+    typeof upi_qr === 'string' ? upi_qr : ''
   );
   const settings = db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(req.userId);
   return res.json(settings);

@@ -24,9 +24,10 @@ export function AuthProvider({ children }) {
     else localStorage.removeItem('pf_user');
   }, [user]);
 
-  const login = async (email, password, isRegister = false) => {
+  const login = async (email, password, isRegister = false, extra = {}) => {
     const path = isRegister ? '/auth/register' : '/auth/login';
-    const data = await api(path, { method: 'POST', body: { email, password } });
+    const body = isRegister ? { email, password, ...extra } : { email, password };
+    const data = await api(path, { method: 'POST', body });
     setToken(data.token);
     setUser(data.user);
     return data;

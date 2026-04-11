@@ -10,6 +10,8 @@ const authRoutes = require('./routes/auth');
 const customerRoutes = require('./routes/customers');
 const itemRoutes = require('./routes/items');
 const invoiceRoutes = require('./routes/invoices');
+const paymentRoutes = require('./routes/payments');
+const analyticsRoutes = require('./routes/analytics');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -23,6 +25,8 @@ app.use('/auth', authRoutes);
 app.use('/customers', customerRoutes);
 app.use('/items', itemRoutes);
 app.use('/invoices', invoiceRoutes);
+app.use('/invoices', paymentRoutes);
+app.use('/analytics', analyticsRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 

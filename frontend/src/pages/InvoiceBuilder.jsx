@@ -1,6 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
+import { formatDate } from '../utils/date';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, getProfile } from '../api';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Badge } from '../components/ui/badge';
+import { Search, Plus, Trash2, FileText, Send, Eye, EyeOff, Settings } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function addDaysISO(iso, days) {
@@ -9,12 +17,324 @@ function addDaysISO(iso, days) {
   return d.toISOString().slice(0, 10);
 }
 function round2(n) { return Math.round(Number(n) * 100) / 100; }
-function formatMoney(n) {
-  return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function inr(n) {
+  return '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 const emptyLine = () => ({ item_id: '', name: '', quantity: 1, rate: 0, description: '', type: 'goods' });
 
+/* ─── Item Combobox Component ─────────────────────────────────────────── */
+function ItemCombobox({ value, onChange, onSelectCatalogItem, catalog, onAddNew }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState(value);
+  const wrapperRef = useRef(null);
 
+  useEffect(() => { setSearch(value); }, [value]);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = catalog.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="relative w-full" ref={wrapperRef}>
+      <Input
+        placeholder="Items"
+        value={search}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        className="flex-1 h-10 w-full font-medium text-base rounded-md border border-input bg-background px-3 py-2 shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      />
+      {open && (
+        <div className="absolute z-50 w-full mt-1 bg-background border border-border rounded-md shadow-lg max-h-60 overflow-hidden flex flex-col">
+          <div className="overflow-y-auto flex-1 max-h-48">
+            {filtered.length > 0 ? (
+              filtered.map(c => (
+                <div 
+                  key={c.id} 
+                  className="px-3 py-3 cursor-pointer hover:bg-secondary/80 border-b border-border/40 last:border-0 transition-colors"
+                  onClick={() => {
+                    onChange(c.name);
+                    onSelectCatalogItem(c);
+                    setOpen(false);
+                  }}
+                >
+                  <div className="font-semibold text-sm text-foreground">{c.name}</div>
+                  {c.description && <div className="text-xs text-muted-foreground mt-0.5 truncate">{c.description}</div>}
+                </div>
+              ))
+            ) : (
+              <div className="px-3 py-3 text-sm text-muted-foreground italic">Type to add as custom item...</div>
+            )}
+          </div>
+          <div className="p-1 border-t border-border/40 bg-muted/20 mt-auto shrink-0">
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full justify-start text-sm h-8 font-medium text-primary hover:text-primary hover:bg-primary/10"
+              onClick={(e) => {
+                e.preventDefault();
+                setOpen(false);
+                if (onAddNew) onAddNew();
+              }}
+            >
+              <Plus className="mr-2 h-3.5 w-3.5" /> Add New Item
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Customer Combobox Component ─────────────────────────────────────── */
+function CustomerCombobox({ value, onChange, customers, onAddNew }) {
+  const [open, setOpen] = useState(false);
+  const selectedCustomer = customers.find(c => String(c.id) === String(value));
+  const [search, setSearch] = useState(selectedCustomer ? selectedCustomer.name : '');
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    const sel = customers.find(c => String(c.id) === String(value));
+    if (sel) setSearch(sel.name);
+    else setSearch('');
+  }, [value, customers]);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setOpen(false);
+        const sel = customers.find(c => String(c.id) === String(value));
+        if (sel) setSearch(sel.name);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [value, customers]);
+
+  const filtered = customers.filter(c => 
+    c.name.toLowerCase().includes(search.toLowerCase()) || 
+    (c.company_name && c.company_name.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  return (
+    <div className="relative w-full" ref={wrapperRef}>
+      <Input
+        placeholder="Search for a customer..."
+        value={search}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => {
+          setSearch('');
+          setOpen(true);
+        }}
+        className="flex-1 h-10 w-full font-medium text-base rounded-md border border-input bg-background px-3 py-2 shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      />
+      {open && (
+        <div className="absolute z-50 w-full mt-1 bg-background border border-border rounded-md shadow-lg max-h-60 overflow-hidden flex flex-col">
+          <div className="overflow-y-auto flex-1 max-h-48">
+            {filtered.length > 0 ? (
+              filtered.map(c => (
+                <div 
+                  key={c.id} 
+                  className="px-3 py-3 cursor-pointer hover:bg-secondary/80 border-b border-border/40 last:border-0 transition-colors"
+                  onClick={() => {
+                    onChange(String(c.id));
+                    setSearch(c.name);
+                    setOpen(false);
+                  }}
+                >
+                  <div className="font-semibold text-sm text-foreground">{c.name}</div>
+                  {c.company_name && <div className="text-xs text-muted-foreground mt-0.5">{c.company_name}</div>}
+                </div>
+              ))
+            ) : (
+              <div className="px-3 py-3 text-sm text-muted-foreground italic">No customers found.</div>
+            )}
+          </div>
+          <div className="p-1 border-t border-border/40 bg-muted/20 mt-auto shrink-0">
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full justify-start text-sm h-8 font-medium text-primary hover:text-primary hover:bg-primary/10"
+              onClick={(e) => {
+                e.preventDefault();
+                setOpen(false);
+                if (onAddNew) onAddNew();
+              }}
+            >
+              <Plus className="mr-2 h-3.5 w-3.5" /> Add New Customer
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Live Preview Component ─────────────────────────────────────────── */
+function InvoicePreview({ settings, selectedCustomer, invoiceNumber, issueDateText, dueDateText, status, computed, discount, notes }) {
+  const isPng = settings?.logo?.startsWith('data:image/png');
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden text-slate-800 text-[13px] leading-relaxed relative flex flex-col min-h-[600px] w-full max-w-[500px] mx-auto hidden-scrollbar" style={{ aspectRatio: '1 / 1.414' }}>
+      {/* Accent stripe */}
+      <div className="h-2 w-full bg-primary" />
+
+      <div className="p-8 flex-1 flex flex-col">
+        {/* Header: Company & Invoice meta */}
+        <div className="flex justify-between items-start gap-6 mb-8">
+          <div className="flex-1">
+            {settings?.logo && (
+              <img
+                src={settings.logo}
+                alt="Logo"
+                className="max-w-[120px] max-h-[60px] object-contain mb-4"
+                style={{ mixBlendMode: isPng ? 'multiply' : 'normal' }}
+              />
+            )}
+            <div className="font-bold text-slate-900 text-base mb-1">
+              {settings?.business_name || 'Your Business'}
+            </div>
+            {settings?.gstin && <div className="text-slate-500">GSTIN: {settings.gstin}</div>}
+            {settings?.phone && <div className="text-slate-500">{settings.phone}</div>}
+            {settings?.business_address && (
+              <div className="text-slate-500 whitespace-pre-line mt-1">
+                {settings.business_address}
+              </div>
+            )}
+          </div>
+
+          <div className="text-right shrink-0">
+            <div className="text-2xl font-bold tracking-widest text-slate-300 uppercase mb-4">INVOICE</div>
+            <div className="grid grid-cols-[auto_auto] gap-x-3 gap-y-1 text-right justify-end">
+              <span className="text-slate-500">Invoice #</span>
+              <span className="font-medium text-slate-900">{invoiceNumber}</span>
+              <span className="text-slate-500">Issued</span>
+              <span className="font-medium text-slate-900">{issueDateText || '—'}</span>
+              <span className="text-slate-500">Due</span>
+              <span className="font-medium text-slate-900">{dueDateText || '—'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Bill To */}
+        <div className="mb-8 p-4 bg-slate-50 rounded-md border border-slate-100">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">BILL TO</div>
+          {selectedCustomer ? (
+            <>
+              <div className="font-bold text-slate-900 text-sm mb-0.5">{selectedCustomer.name}</div>
+              {selectedCustomer.company_name && <div className="text-slate-600">{selectedCustomer.company_name}</div>}
+              {selectedCustomer.email && <div className="text-slate-600">{selectedCustomer.email}</div>}
+              {selectedCustomer.address && (
+                <div className="text-slate-600 whitespace-pre-line mt-1">
+                  {selectedCustomer.address}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-slate-400 italic">Select a customer…</div>
+          )}
+        </div>
+
+        {/* Line Items Table */}
+        <div className="mb-8">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200">
+                <th className="py-2 px-1 text-slate-500 font-semibold w-[8%]">#</th>
+                <th className="py-2 px-1 text-slate-500 font-semibold w-[42%]">Item</th>
+                <th className="py-2 px-1 text-slate-500 font-semibold w-[12%] text-right">Qty</th>
+                <th className="py-2 px-1 text-slate-500 font-semibold w-[18%] text-right">Rate</th>
+                <th className="py-2 px-1 text-slate-500 font-semibold w-[20%] text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {computed.itemLines.length > 0 && computed.itemLines.some(l => l.name) ? (
+                computed.itemLines.map((line, i) => (
+                  line.name ? (
+                    <tr key={i}>
+                      <td className="py-3 px-1 text-slate-400 align-top">{i + 1}</td>
+                      <td className="py-3 px-1 align-top">
+                        <div className="font-medium text-slate-900">{line.name}</div>
+                        {line.description && (
+                          <div className="text-slate-500 text-xs mt-0.5">{line.description}</div>
+                        )}
+                      </td>
+                      <td className="py-3 px-1 align-top text-right text-slate-600">
+                        {line.type === 'service' ? '—' : line.quantity}
+                      </td>
+                      <td className="py-3 px-1 align-top text-right text-slate-600">{inr(line.rate)}</td>
+                      <td className="py-3 px-1 align-top text-right font-semibold text-slate-900">
+                        {inr(line.amount)}
+                      </td>
+                    </tr>
+                  ) : null
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-slate-400 italic">
+                    Add items to see them here
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Totals */}
+        <div className="flex justify-end mb-8">
+          <div className="w-1/2 min-w-[200px]">
+            <div className="flex justify-between py-1.5 text-slate-600">
+              <span>Subtotal</span>
+              <span>{inr(computed.subtotal)}</span>
+            </div>
+            {Number(discount) > 0 && (
+              <div className="flex justify-between py-1.5 text-emerald-600">
+                <span>Discount</span>
+                <span>− {inr(discount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between py-3 mt-1 border-t-2 border-slate-800 font-bold text-slate-900 text-sm">
+              <span>Total Due</span>
+              <span>{inr(computed.total)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Spacer to push notes to bottom if short */}
+        <div className="flex-1" />
+
+        {/* Notes */}
+        {notes && (
+          <div className="mt-8 pt-6 border-t border-slate-100">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">NOTES / TERMS</div>
+            <div className="text-slate-500 text-xs">{notes}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer stripe */}
+      <div className="bg-slate-50 p-4 text-center text-slate-400 text-xs border-t border-slate-100 italic">
+        Thank you for your business
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main InvoiceBuilder ────────────────────────────────────────────── */
 export default function InvoiceBuilder() {
   const { id } = useParams();
   const isEdit = Boolean(id);
@@ -24,16 +344,12 @@ export default function InvoiceBuilder() {
   const [customers, setCustomers]     = useState([]);
   const [catalog, setCatalog]         = useState([]);
   const [customerId, setCustomerId]   = useState('');
-  const [invoiceNumber, setInvoiceNumber] = useState('INV-' + Math.floor(Math.random() * 10000000000));
+  const [invoiceNumber, setInvoiceNumber] = useState('');
   
-  const formatDateForDisplay = (iso) => {
-    if (!iso) return '';
-    const [y, m, d] = iso.slice(0, 10).split('-');
-    return `${d}/${m}/${y}`;
-  };
+  const formatDateForDisplay = formatDate;
 
-  const [issueDateText, setIssueDateText]     = useState(formatDateForDisplay(todayISO()));
-  const [dueDateText, setDueDateText]         = useState(formatDateForDisplay(addDaysISO(todayISO(), 30)));
+  const [issueDate, setIssueDate] = useState(todayISO());
+  const [dueDate, setDueDate] = useState(addDaysISO(todayISO(), 30));
   
   const [status, setStatus]           = useState('draft');
   const [discount, setDiscount]       = useState(0);
@@ -42,24 +358,133 @@ export default function InvoiceBuilder() {
   const [loading, setLoading]         = useState(true);
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
+  const [showPreview, setShowPreview] = useState(false);
+
+  // Modals state
+  const [newCustomerOpen, setNewCustomerOpen] = useState(false);
+  const [newCustomerForm, setNewCustomerForm] = useState({ type: 'business', name: '', email: '', phone: '', company_name: '', address: '' });
+  const [newCustomerSaving, setNewCustomerSaving] = useState(false);
+  
+  const [newItemOpen, setNewItemOpen] = useState(false);
+  const [newItemForm, setNewItemForm] = useState({ name: '', type: 'service', price: '', description: '' });
+  const [newItemSaving, setNewItemSaving] = useState(false);
+
+  // Config State
+  const [configOpen, setConfigOpen] = useState(false);
+  const [configForm, setConfigForm] = useState({ type: 'sequential', prefix: 'INV-', postfix: '' });
+  const [configSaving, setConfigSaving] = useState(false);
+
+  function handleOpenConfig() {
+    const savedType = settings.invoice_generation_type;
+    const type = savedType === 'manual' || savedType === 'sequential' ? savedType : 'sequential';
+    setConfigForm({
+      type,
+      prefix: typeof settings.invoice_prefix === 'string' ? settings.invoice_prefix : 'INV-',
+      postfix: typeof settings.invoice_postfix === 'string' ? settings.invoice_postfix : ''
+    });
+    setConfigOpen(true);
+  }
+
+  // Derived: is the invoice number manually editable?
+  const isManualMode = (settings.invoice_generation_type || 'sequential') === 'manual';
+
+  async function handleSaveConfig(e) {
+    if (e) e.preventDefault();
+    setConfigSaving(true);
+    try {
+      const updated = await api('/auth/profile', {
+        method: 'PUT',
+        body: {
+          business_name: settings.business_name || '',
+          business_address: settings.business_address || '',
+          gstin: settings.gstin || '',
+          phone: settings.phone || '',
+          invoice_generation_type: configForm.type,
+          invoice_prefix: configForm.type === 'sequential' ? (configForm.prefix || 'INV-') : 'INV-',
+          invoice_postfix: configForm.type === 'sequential' ? (configForm.postfix || '') : ''
+        }
+      });
+      setSettings(updated);
+      setConfigOpen(false);
+      // Refresh invoice number only for sequential
+      if (!isEdit && configForm.type === 'sequential') {
+        const data = await api('/invoices/next-number').catch(() => null);
+        if (data && data.nextNumber) setInvoiceNumber(data.nextNumber);
+      } else if (!isEdit && configForm.type === 'manual') {
+        // leave current invoiceNumber as-is so user can type it
+      }
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setConfigSaving(false);
+    }
+  }
+
+  async function handleSaveNewCustomer(e) {
+    if (e) e.preventDefault();
+    setNewCustomerSaving(true);
+    try {
+      const created = await api('/customers', { method: 'POST', body: newCustomerForm });
+      setCustomers(prev => [...prev, created]);
+      setCustomerId(String(created.id));
+      setNewCustomerOpen(false);
+      setNewCustomerForm({ type: 'business', name: '', email: '', phone: '', company_name: '', address: '' });
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setNewCustomerSaving(false);
+    }
+  }
+
+  async function handleSaveNewItem(e) {
+    if (e) e.preventDefault();
+    setNewItemSaving(true);
+    try {
+      const body = { ...newItemForm, price: parseFloat(newItemForm.price) || 0 };
+      const created = await api('/items', { method: 'POST', body });
+      setCatalog(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setNewItemOpen(false);
+      setNewItemForm({ name: '', type: 'service', price: '', description: '' });
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setNewItemSaving(false);
+    }
+  }
+
+  const customerF = (field) => ({
+    value: newCustomerForm[field] ?? '',
+    onChange: (e) => setNewCustomerForm((prev) => ({ ...prev, [field]: e.target.value })),
+  });
+  
+  const itemF = (field) => ({
+    value: newItemForm[field] ?? '',
+    onChange: (e) => setNewItemForm((prev) => ({ ...prev, [field]: e.target.value })),
+  });
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [c, it, prof] = await Promise.all([api('/customers'), api('/items'), getProfile()]);
+        const [c, it, prof, nextNum] = await Promise.all([
+          api('/customers'), 
+          api('/items'), 
+          getProfile(),
+          !isEdit ? api('/invoices/next-number').catch(() => null) : Promise.resolve(null)
+        ]);
         if (cancelled) return;
         setCustomers(c || []);
         setCatalog(it || []);
         setSettings(prof || {});
+        if (!isEdit && nextNum && nextNum.nextNumber) setInvoiceNumber(nextNum.nextNumber);
         
         if (isEdit) {
           const inv = await api(`/invoices/${id}`);
           if (cancelled) return;
           setCustomerId(String(inv.customer_id));
           setInvoiceNumber(inv.invoice_number);
-          setIssueDateText(formatDateForDisplay(inv.issue_date));
-          setDueDateText(formatDateForDisplay(inv.due_date));
+          setIssueDate(inv.issue_date.substring(0, 10));
+          setDueDate(inv.due_date.substring(0, 10));
           setStatus(inv.status);
           setDiscount(Number(inv.discount));
           setNotes(inv.notes || '');
@@ -80,7 +505,6 @@ export default function InvoiceBuilder() {
 
   const computed = useMemo(() => {
     const itemLines = lines.map((l) => {
-      // If service, ignore quantity
       const qty = l.type === 'service' ? 1 : Number(l.quantity);
       const rate = Number(l.rate);
       const amount = round2((Number.isFinite(qty) ? qty : 0) * (Number.isFinite(rate) ? rate : 0));
@@ -96,47 +520,34 @@ export default function InvoiceBuilder() {
     setLines((prev) => prev.map((row, j) => (j === i ? { ...row, ...patch } : row)));
   }
 
-  function handleDateChange(setter, e) {
-    let val = e.target.value.replace(/\D/g, '');
-    if (val.length > 2) val = val.slice(0,2) + '/' + val.slice(2);
-    if (val.length > 5) val = val.slice(0,5) + '/' + val.slice(5, 9);
-    setter(val.slice(0, 10));
-  }
-
-  function parseDateForApi(ddmmyyyy) {
-    const parts = ddmmyyyy.split('/');
-    if (parts.length === 3 && parts[2].length === 4) {
-      return `${parts[2]}-${parts[1]}-${parts[0]}`;
-    }
-    return ''; // Invalid date format fallback 
-  }
-
   function addRow() { setLines((prev) => [...prev, emptyLine()]); }
   function removeRow(i) { setLines((prev) => (prev.length <= 1 ? prev : prev.filter((_, j) => j !== i))); }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
+  async function handleSubmit(e, overrideStatus = null) {
+    if (e && e.preventDefault) e.preventDefault();
     setError('');
     if (!customerId) { setError('Please select a customer'); return; }
     
-    const parsedIssueDate = parseDateForApi(issueDateText);
-    const parsedDueDate = parseDateForApi(dueDateText);
+    const parsedIssueDate = issueDate;
+    const parsedDueDate = dueDate;
     
     if (!parsedIssueDate || !parsedDueDate) {
-      setError('Please provide valid dates in DD/MM/YYYY format');
+      setError('Please provide valid dates');
       return;
     }
 
-    const payloadItems = computed.itemLines.map((l) => ({
-      item_id: l.item_id ? Number(l.item_id) : null,
-      name: l.name.trim(),
-      description: l.description || null,
-      quantity: l.type === 'service' ? null : l.quantity,
-      rate: l.rate,
-    }));
+    const payloadItems = computed.itemLines
+      .filter((l) => l.name.trim())
+      .map((l) => ({
+        item_id: l.item_id ? Number(l.item_id) : null,
+        name: l.name.trim(),
+        description: l.description || null,
+        quantity: l.type === 'service' ? null : l.quantity,
+        rate: l.rate,
+      }));
     
-    if (payloadItems.some((l) => !l.name || (l.quantity !== null && l.quantity <= 0) || l.rate < 0)) {
-      setError('Each line needs a name, positive quantity (if required), and non-negative rate');
+    if (payloadItems.length === 0) {
+      setError('Atleast 1 item should be added');
       return;
     }
     setSaving(true);
@@ -145,7 +556,7 @@ export default function InvoiceBuilder() {
         customer_id: Number(customerId),
         issue_date: parsedIssueDate,
         due_date: parsedDueDate,
-        status,
+        status: overrideStatus || status,
         discount: Number(discount) || 0,
         notes,
         items: payloadItems,
@@ -165,177 +576,447 @@ export default function InvoiceBuilder() {
 
   const selectedCustomer = useMemo(() => customers.find(c => String(c.id) === customerId), [customers, customerId]);
 
-  if (loading) return <div className="loading-page"><div className="spinner" /> Loading…</div>;
+  if (loading) return (
+    <div className="flex justify-center p-12 text-muted-foreground text-sm items-center gap-2">
+      <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      Loading editor…
+    </div>
+  );
 
   return (
-    <div>
-
-      <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="space-y-6 pb-20">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="page-title">Create Invoice</h1>
-          <p className="page-subtitle">Generate and manage customer invoices quickly and accurately.</p>
+          <h1 className="text-3xl font-bold tracking-tight">{isEdit ? 'Edit Invoice' : 'Create Invoice'}</h1>
+          <p className="text-muted-foreground mt-1">Generate and manage customer invoices quickly and accurately.</p>
         </div>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <button type="button" className="btn btn-ghost" style={{ background: '#FFF' }}>Add Draft</button>
-          <button type="submit" form="invoice-form" className="btn btn-primary" disabled={saving}>
-            {saving ? 'Sending…' : 'Send Invoice'}
-          </button>
+        <div className="flex gap-3">
+          <Button type="button" variant="outline" onClick={() => setShowPreview(!showPreview)}>
+            {showPreview ? <><EyeOff className="mr-2 h-4 w-4" /> Hide Preview</> : <><Eye className="mr-2 h-4 w-4" /> Show Preview</>}
+          </Button>
+          <Button 
+            type="button" 
+            variant="outline"
+            disabled={saving}
+            onClick={(e) => handleSubmit(e, 'draft')}
+          >
+            Save Draft
+          </Button>
+          <Button 
+            type="submit" 
+            form="invoice-form" 
+            disabled={saving}
+            onClick={() => setStatus('sent')}
+          >
+            <Send className="mr-2 h-4 w-4" />
+            {saving ? 'Saving…' : 'Save & Send'}
+          </Button>
         </div>
       </div>
 
-      {error && <div className="error-msg" style={{ marginBottom: 16 }}>{error}</div>}
+      {error && <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">{error}</div>}
 
-      <div className="form-layout">
-        {/* FORM */}
-        <div className="form-content" style={{ maxWidth: '900px', margin: '0 auto' }}>
-          <form id="invoice-form" onSubmit={handleSubmit} className="stack">
+      {/* ─── Split Layout: Form (left) + Preview (right) ─────────────── */}
+      <div className="flex flex-col lg:flex-row gap-8 items-start">
+        {/* LEFT: Form */}
+        <div className="flex-1 w-full space-y-6">
+          <form id="invoice-form" onSubmit={handleSubmit} className="space-y-6">
             
             {/* Invoice Detail Section */}
-            <div className="card">
-              <div className="card-header"><span className="card-title">Invoice Detail</span></div>
-              <div className="card-body stack">
-                <div className="form-group">
-                  <label>Billed To</label>
-                  <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
-                    <option value="">Select a customer…</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={String(c.id)}>
-                        {c.name}{c.company_name ? ` — ${c.company_name}` : ''}
-                      </option>
-                    ))}
-                  </select>
+            <Card>
+              <CardHeader>
+                <CardTitle>Invoice Details</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-6">
+                <div className="grid gap-2 max-w-sm">
+                  <Label>Billed To *</Label>
+                  <CustomerCombobox 
+                    value={customerId} 
+                    onChange={setCustomerId} 
+                    customers={customers}
+                    onAddNew={() => setNewCustomerOpen(true)}
+                  />
                 </div>
                 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Invoice Number</label>
-                    <input type="text" value={invoiceNumber} readOnly style={{ background: 'var(--surface-2)' }} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid gap-2 relative">
+                    <div className="flex justify-between items-center">
+                      <Label>Invoice Number</Label>
+                      <button type="button" onClick={handleOpenConfig} className="text-muted-foreground hover:text-foreground outline-none">
+                        <Settings className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <Input 
+                      type="text" 
+                      value={invoiceNumber} 
+                      readOnly={!isManualMode}
+                      onChange={isManualMode ? (e) => setInvoiceNumber(e.target.value) : undefined}
+                      className={`font-mono ${!isManualMode ? 'bg-muted text-muted-foreground' : ''}`}
+                      placeholder={isManualMode ? 'Enter invoice number' : ''}
+                    />
                   </div>
-                  <div className="form-group">
-                    <label>Currency</label>
-                    <select defaultValue="INR">
-                      <option value="INR">🇮🇳 Indian Rupee</option>
-                      <option value="USD">🇺🇸 US Dollar</option>
+                  <div className="grid gap-2">
+                    <Label>Currency</Label>
+                    <select defaultValue="INR" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      <option value="INR">🇮🇳 Indian Rupee (INR)</option>
+                      <option value="USD">🇺🇸 US Dollar (USD)</option>
                     </select>
                   </div>
                 </div>
 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Issued Date (DD/MM/YYYY)</label>
-                    <input type="text" placeholder="DD/MM/YYYY" value={issueDateText} onChange={(e) => handleDateChange(setIssueDateText, e)} required />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Issued Date</Label>
+                    <Input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} required className="block w-full" />
                   </div>
-                  <div className="form-group">
-                    <label>Due Date (DD/MM/YYYY)</label>
-                    <input type="text" placeholder="DD/MM/YYYY" value={dueDateText} onChange={(e) => handleDateChange(setDueDateText, e)} required />
+                  <div className="grid gap-2">
+                    <Label>Due Date</Label>
+                    <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} required className="block w-full" />
                   </div>
                 </div>
 
-                {/* Line Items List */}
-                <div style={{ marginTop: 12 }}>
-                  <div className="line-row" style={{ gridTemplateColumns: 'minmax(140px, 2fr) 90px 100px 90px 30px', marginBottom: 8 }}>
-                    <span className="muted">Item</span>
-                    <span className="muted text-right">QTY</span>
-                    <span className="muted text-right">Cost</span>
-                    <span className="muted text-right">Amount</span>
+                {/* Line Items */}
+                <div className="pt-4 border-t border-border mt-2">
+                  <Label className="mb-4 block text-base font-semibold">Line Items</Label>
+                  
+                  <div className="hidden md:grid grid-cols-[1fr_80px_100px_90px_40px] gap-3 mb-2 px-2">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Item Details</span>
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider text-right">Qty</span>
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider text-right">Rate</span>
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider text-right">Amount</span>
                     <span />
                   </div>
 
-                  <div className="invoice-lines" style={{ gap: 12 }}>
+                  <div className="space-y-4">
                     {lines.map((line, i) => (
-                      <div key={i} className="line-row" style={{ gridTemplateColumns: 'minmax(240px, 2fr) 90px 100px 90px 30px', alignItems: 'flex-start' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <span style={{ color: '#C0C0C0', marginTop: 10, cursor: 'grab' }}>⋮⋮</span>
-                            <select
-                              value={line.item_id || 'custom'}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                if (val === 'custom') {
-                                  updateLine(i, { item_id: '', name: '', rate: 0, description: '', type: 'goods', quantity: 1 });
-                                } else {
-                                  const it = catalog.find(x => String(x.id) === val);
-                                  if (it) {
-                                    updateLine(i, { item_id: String(it.id), name: it.name, rate: Number(it.price), description: it.description || '', type: it.type || 'goods' });
-                                  }
-                                }
-                              }}
-                              style={{ width: '130px' }}
-                            >
-                              <option value="custom">Custom Item...</option>
-                              {catalog.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                            <input
-                              placeholder="Item name"
-                              value={line.name}
-                              onChange={(e) => updateLine(i, { name: e.target.value })}
-                              required
-                              style={{ flex: 1 }}
-                            />
-                          </div>
-                          <input
+                      <div key={i} className="flex flex-col md:grid md:grid-cols-[1fr_80px_100px_90px_40px] gap-3 items-start bg-secondary/30 p-3 md:p-2 md:bg-transparent rounded-lg border md:border-none border-border">
+                        <div className="flex flex-col gap-2.5 w-full">
+                          <ItemCombobox
+                            value={line.name}
+                            onChange={(val) => {
+                              // Just typing, assume it's a custom item unless it matches exactly
+                              const it = catalog.find(x => x.name.toLowerCase() === val.toLowerCase());
+                              if (it) {
+                                updateLine(i, { 
+                                  item_id: String(it.id), name: it.name, rate: Number(it.price), 
+                                  description: it.description || '', type: it.type || 'goods' 
+                                });
+                              } else {
+                                updateLine(i, { item_id: '', name: val });
+                              }
+                            }}
+                            onSelectCatalogItem={(it) => {
+                              updateLine(i, { 
+                                item_id: String(it.id), name: it.name, rate: Number(it.price), 
+                                description: it.description || '', type: it.type || 'goods' 
+                              });
+                            }}
+                            catalog={catalog}
+                            onAddNew={() => setNewItemOpen(true)}
+                          />
+                          <Input
                             placeholder="Description (optional)"
                             value={line.description || ''}
                             onChange={(e) => updateLine(i, { description: e.target.value })}
-                            style={{ fontSize: 12, marginLeft: 22 }}
+                            className="h-9 text-sm bg-muted/40 border-transparent hover:border-border focus:border-border transition-colors"
                           />
                         </div>
                         
-                        {line.type === 'service' ? (
-                          <div className="text-right muted" style={{ marginTop: 10 }}>—</div>
-                        ) : (
-                          <input
-                            type="number" min="1" step="1"
-                            placeholder="qty"
-                            value={line.quantity || ''}
-                            className="text-right"
-                            onChange={(e) => updateLine(i, { quantity: parseInt(e.target.value, 10) || 0 })}
-                          />
-                        )}
+                        <div className="flex items-center gap-2 w-full md:w-auto md:block pt-0.5">
+                          <Label className="md:hidden w-16 text-xs text-muted-foreground">Qty</Label>
+                          {line.type === 'service' ? (
+                            <div className="h-10 flex items-center justify-end text-muted-foreground md:w-full w-full px-3">—</div>
+                          ) : (
+                            <Input
+                              type="number" min="1" step="1"
+                              placeholder="1"
+                              value={line.quantity || ''}
+                              onChange={(e) => updateLine(i, { quantity: parseInt(e.target.value, 10) || 0 })}
+                              className="text-right h-10 w-full"
+                            />
+                          )}
+                        </div>
                         
-                        <input
-                          type="number" min="0" step="0.01"
-                          placeholder="0.00"
-                          value={line.rate || ''}
-                          className="text-right"
-                          onChange={(e) => updateLine(i, { rate: parseFloat(e.target.value) || 0 })}
-                        />
-                        <div className="line-amount text-right" style={{ paddingTop: 10 }}>{formatMoney(computed.itemLines[i]?.amount ?? 0)}</div>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-icon text-center"
-                          onClick={() => removeRow(i)}
-                          title="Remove line"
-                          style={{ color: 'var(--muted)', borderColor: 'transparent', padding: '0 4px', fontSize: 16 }}
-                        >
-                          🗑
-                        </button>
+                        <div className="flex items-center gap-2 w-full md:w-auto md:block pt-0.5">
+                          <Label className="md:hidden w-16 text-xs text-muted-foreground">Rate</Label>
+                          <Input
+                            type="number" min="0" step="0.01"
+                            placeholder="0.00"
+                            value={line.rate || ''}
+                            onChange={(e) => updateLine(i, { rate: parseFloat(e.target.value) || 0 })}
+                            className="text-right h-10 w-full"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-2 w-full md:w-auto md:block pt-0.5">
+                          <Label className="md:hidden w-16 text-xs text-muted-foreground">Amount</Label>
+                          <div className="md:h-10 flex items-center md:justify-end font-semibold text-base w-full text-right md:px-0">
+                            {inr(computed.itemLines[i]?.amount ?? 0)}
+                          </div>
+                        </div>
+
+                        <div className="flex w-full md:w-auto justify-end md:justify-center md:items-start pt-1 md:pt-1.5">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeRow(i)}
+                            className="h-10 w-10 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                            title="Remove item"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
                   
-                  <button type="button" className="btn btn-ghost" onClick={addRow} style={{ marginTop: 12, padding: '6px 10px', fontSize: 13, border: 'none', fontWeight: 600 }}>
-                    + Add Item
-                  </button>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={addRow} 
+                    className="mt-4 border-dashed bg-secondary/20 hover:bg-secondary/60"
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add Line Item
+                  </Button>
                 </div>
-              </div>
-            </div>
 
-            <div className="card">
-              <div className="card-header"><span className="card-title">Notes / Terms</span></div>
-              <div className="card-body">
+                {/* Discount */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                  <div className="grid gap-2">
+                    <Label>Additional Discount (₹)</Label>
+                    <Input
+                      type="number" min="0" step="0.01"
+                      placeholder="0.00"
+                      value={discount || ''}
+                      onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Notes & Terms</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <textarea
+                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   placeholder="Thank you for your business. Please make payment within 30 days..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  style={{ width: '100%', minHeight: '60px', border: 'none', padding: 0, outline: 'none' }}
                 />
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
           </form>
         </div>
+
+        {/* RIGHT: Live Preview */}
+        {showPreview && (
+          <div className="w-full lg:w-[460px] xl:w-[500px] shrink-0 animate-in fade-in slide-in-from-right-4 duration-300">
+            <div className="sticky top-20 bg-muted/30 p-4 rounded-xl border border-border">
+              <div className="flex items-center gap-2 mb-4 px-1 text-sm font-medium text-muted-foreground">
+                <FileText className="h-4 w-4" />
+                <span>Live PDF Preview</span>
+                <span className="relative flex h-2 w-2 ml-1">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              </div>
+              
+              <div className="rounded-lg overflow-hidden shadow-xl ring-1 ring-slate-900/5 bg-slate-100 p-1">
+                <InvoicePreview
+                  settings={settings}
+                  selectedCustomer={selectedCustomer}
+                  invoiceNumber={invoiceNumber}
+                  issueDateText={formatDate(issueDate)}
+                  dueDateText={formatDate(dueDate)}
+                  status={status}
+                  computed={computed}
+                  discount={discount}
+                  notes={notes}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
+
+      {/* Modal Dialog for New Customer */}
+      <Dialog open={newCustomerOpen} onOpenChange={setNewCustomerOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Customer</DialogTitle>
+          </DialogHeader>
+          <div className="px-6 pb-2">
+            <form id="new-customer-form" onSubmit={handleSaveNewCustomer} className="grid gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Type</Label>
+                  <select 
+                    {...customerF('type')} 
+                    required 
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="business">Business</option>
+                    <option value="individual">Individual</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Name *</Label>
+                  <Input placeholder="Full name" {...customerF('name')} required />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Email *</Label>
+                  <Input type="email" placeholder="contact@example.com" {...customerF('email')} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone</Label>
+                  <Input placeholder="+91 98765 43210" {...customerF('phone')} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Company Name</Label>
+                  <Input placeholder="Acme Pvt Ltd" {...customerF('company_name')} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Address</Label>
+                  <Input placeholder="123 Main St, City" {...customerF('address')} />
+                </div>
+              </div>
+            </form>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" type="button" onClick={() => setNewCustomerOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" form="new-customer-form" disabled={newCustomerSaving}>
+              {newCustomerSaving ? 'Saving…' : 'Save Customer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Dialog for New Item */}
+      <Dialog open={newItemOpen} onOpenChange={setNewItemOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Item</DialogTitle>
+          </DialogHeader>
+          <div className="px-6 pb-2">
+            <form id="new-item-form" onSubmit={handleSaveNewItem} className="grid gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Name *</Label>
+                  <Input placeholder="e.g. Web Design" {...itemF('name')} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Type</Label>
+                  <select 
+                    {...itemF('type')} 
+                    required 
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="service">Service</option>
+                    <option value="goods">Goods</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Default Price (₹) *</Label>
+                  <Input type="number" min="0" step="0.01" placeholder="0.00" {...itemF('price')} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Input placeholder="Short description (optional)" {...itemF('description')} />
+                </div>
+              </div>
+            </form>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" type="button" onClick={() => setNewItemOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" form="new-item-form" disabled={newItemSaving}>
+              {newItemSaving ? 'Saving…' : 'Save Item'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={configOpen} onOpenChange={setConfigOpen}>
+        <DialogContent className="sm:max-w-[460px]">
+          <DialogHeader className="px-6 pt-6">
+            <DialogTitle className="text-xl font-semibold">Invoice Number Settings</DialogTitle>
+          </DialogHeader>
+          <form id="config-form" onSubmit={handleSaveConfig} className="space-y-5 px-6 pt-3 pb-2">
+            {/* Generation Type Toggle */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Generation Type</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfigForm(prev => ({ ...prev, type: 'sequential' }))}
+                  className={`rounded-lg border-2 px-4 py-3 text-center font-semibold text-sm transition-colors ${
+                    configForm.type === 'sequential'
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-border hover:border-muted-foreground/40'
+                  }`}
+                >
+                  Sequential
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfigForm(prev => ({ ...prev, type: 'manual' }))}
+                  className={`rounded-lg border-2 px-4 py-3 text-center font-semibold text-sm transition-colors ${
+                    configForm.type === 'manual'
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-border hover:border-muted-foreground/40'
+                  }`}
+                >
+                  Enter Manually
+                </button>
+              </div>
+            </div>
+
+            {/* Sequential: prefix + postfix */}
+            {configForm.type === 'sequential' && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-sm">Prefix</Label>
+                  <Input
+                    value={configForm.prefix}
+                    onChange={(e) => setConfigForm(prev => ({ ...prev, prefix: e.target.value }))}
+                    placeholder="INV-"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm">Postfix <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+                  <Input
+                    value={configForm.postfix}
+                    onChange={(e) => setConfigForm(prev => ({ ...prev, postfix: e.target.value }))}
+                    placeholder="e.g. -2025"
+                  />
+                </div>
+              </div>
+            )}
+          </form>
+          <DialogFooter className="px-6 pb-6 pt-2">
+            <Button variant="outline" type="button" onClick={() => setConfigOpen(false)} disabled={configSaving}>Cancel</Button>
+            <Button type="submit" form="config-form" disabled={configSaving}>
+              {configSaving ? 'Saving…' : 'Save Settings'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
