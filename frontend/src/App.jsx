@@ -13,6 +13,7 @@ import InvoiceDetail from './pages/InvoiceDetail';
 import Profile from './pages/Profile';
 import CustomerDetail from './pages/CustomerDetail';
 import ItemDetail from './pages/ItemDetail';
+import LandingPage from './pages/LandingPage';
 
 
 function PrivateLayout({ children }) {
@@ -155,7 +156,7 @@ export default function App() {
       <Route path="/login"    element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route path="/register" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />} />
 
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
       <Route path="/dashboard" element={<PrivateLayout><Dashboard /></PrivateLayout>} />
       <Route path="/invoices" element={<PrivateLayout><Invoices /></PrivateLayout>} />
       <Route path="/invoices/create" element={<PrivateLayout><InvoiceBuilder /></PrivateLayout>} />
@@ -167,7 +168,7 @@ export default function App() {
       <Route path="/invoices/:id" element={<PrivateLayout><InvoiceDetail /></PrivateLayout>} />
       <Route path="/invoices/:id/edit" element={<PrivateLayout><InvoiceBuilder /></PrivateLayout>} />
       <Route path="/profile" element={<PrivateLayout><Profile /></PrivateLayout>} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/"} replace />} />
     </Routes>
   );
 }

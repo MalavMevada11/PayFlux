@@ -898,4 +898,77 @@ async function pdf(req, res) {
   }
 }
 
-module.exports = { create, list, getOne, update, remove, pdf, getNextNumber };
+// ─── Live HTML preview (same template as PDF, from raw form data) ─────────
+
+async function previewHtml(req, res) {
+  try {
+    const body = req.body || {};
+
+    // Load user business settings
+    const { rows: settingsRows } = await pool.query(
+      'SELECT * FROM user_settings WHERE user_id = $1',
+      [req.userId]
+    );
+    const settings = settingsRows[0] || {};
+
+    // Build items with amounts
+    const rawItems = Array.isArray(body.items) ? body.items : [];
+    const items = rawItems.map(item => {
+      const qty = Number(item.quantity) || 1;
+      const rate = Number(item.rate) || 0;
+      return {
+        item_id: item.item_id || null,
+        name: item.name || '',
+        description: item.description || '',
+        quantity: qty,
+        rate: roundMoney(rate),
+        amount: roundMoney(qty * rate),
+      };
+    });
+
+    // Calculate totals
+    const discountRaw = body.discount !== undefined ? body.discount : 0;
+    const dType = body.discount_type === 'percent' ? 'percent' : 'flat';
+    const taxArr = Array.isArray(body.taxes) ? body.taxes : [];
+    const t = calculateTotals(items, discountRaw, dType, taxArr);
+    if (t.error) return res.status(400).json({ error: t.error });
+
+    // Look up customer if provided
+    let customer = {};
+    if (body.customer_id) {
+      const { rows: custRows } = await pool.query(
+        'SELECT * FROM customers WHERE id = $1 AND user_id = $2',
+        [body.customer_id, req.userId]
+      );
+      customer = custRows[0] || {};
+    }
+
+    // Build a fake "invoice" object that invoiceHtml() expects
+    const inv = {
+      invoice_number: body.invoice_number || '',
+      issue_date: body.issue_date || '',
+      due_date: body.due_date || '',
+      status: body.status || 'draft',
+      subtotal: t.subtotal,
+      discount: t.discount,
+      discount_type: t.discount_type,
+      discount_amount: t.discount_amount,
+      tax_amount: t.tax_amount,
+      total: t.total,
+      remaining: t.total,
+      notes: body.notes || '',
+      customer,
+      items,
+      taxes: t.taxes,
+    };
+
+    const html = invoiceHtml(inv, settings);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to generate preview' });
+  }
+}
+
+module.exports = { create, list, getOne, update, remove, pdf, previewHtml, getNextNumber };

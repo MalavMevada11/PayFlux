@@ -7,6 +7,7 @@ router.use(authMiddleware);
 router.post('/', invoice.create);
 router.get('/', invoice.list);
 router.get('/next-number', invoice.getNextNumber);
+router.post('/preview-html', invoice.previewHtml);
 router.get('/:id/pdf', invoice.pdf);
 router.get('/:id', invoice.getOne);
 router.put('/:id', invoice.update);

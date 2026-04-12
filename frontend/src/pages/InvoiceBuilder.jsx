@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { formatDate } from '../utils/date';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api, getProfile } from '../api';
+import { api, getProfile, previewHtml as fetchPreviewHtml } from '../api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -186,158 +186,103 @@ function CustomerCombobox({ value, onChange, customers, onAddNew }) {
   );
 }
 
-/* ─── Live Preview Component ─────────────────────────────────────────── */
-function InvoicePreview({ settings, selectedCustomer, invoiceNumber, issueDateText, dueDateText, status, computed, notes }) {
-  const isPng = settings?.logo?.startsWith('data:image/png');
+/* ─── Live PDF Preview (iframe-based, renders actual PDF HTML) ────────── */
+function LivePdfPreview({ formData }) {
+  const iframeRef = useRef(null);
+  const [html, setHtml] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const containerRef = useRef(null);
+  const [scale, setScale] = useState(0.5);
+  const debounceRef = useRef(null);
+
+  // Compute scale factor: container width / A4 width (794px at 96dpi)
+  const A4_WIDTH = 794;
+
+  useEffect(() => {
+    function updateScale() {
+      if (containerRef.current) {
+        const containerWidth = containerRef.current.offsetWidth;
+        setScale(containerWidth / A4_WIDTH);
+      }
+    }
+    updateScale();
+    const obs = new ResizeObserver(updateScale);
+    if (containerRef.current) obs.observe(containerRef.current);
+    return () => obs.disconnect();
+  }, []);
+
+  // Debounced fetch of preview HTML
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const result = await fetchPreviewHtml(formData);
+        setHtml(result);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }, 500);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [JSON.stringify(formData)]);
+
+  // Write HTML to iframe
+  useEffect(() => {
+    if (!html || !iframeRef.current) return;
+    const doc = iframeRef.current.contentDocument;
+    if (doc) {
+      doc.open();
+      doc.write(html);
+      doc.close();
+    }
+  }, [html]);
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden text-slate-800 text-[13px] leading-relaxed relative flex flex-col min-h-[600px] w-full max-w-[500px] mx-auto hidden-scrollbar" style={{ aspectRatio: '1 / 1.414' }}>
-      {/* Accent stripe */}
-      <div className="h-2 w-full bg-primary" />
-
-      <div className="p-8 flex-1 flex flex-col">
-        {/* Header: Company & Invoice meta */}
-        <div className="flex justify-between items-start gap-6 mb-8">
-          <div className="flex-1">
-            {settings?.logo && (
-              <img
-                src={settings.logo}
-                alt="Logo"
-                className="max-w-[120px] max-h-[60px] object-contain mb-4"
-                style={{ mixBlendMode: isPng ? 'multiply' : 'normal' }}
-              />
-            )}
-            <div className="font-bold text-slate-900 text-base mb-1">
-              {settings?.business_name || 'Your Business'}
-            </div>
-            {settings?.gstin && <div className="text-slate-500">GSTIN: {settings.gstin}</div>}
-            {settings?.phone && <div className="text-slate-500">{settings.phone}</div>}
-            {settings?.business_address && (
-              <div className="text-slate-500 whitespace-pre-line mt-1">
-                {settings.business_address}
-              </div>
-            )}
-          </div>
-
-          <div className="text-right shrink-0">
-            <div className="text-2xl font-bold tracking-widest text-slate-300 uppercase mb-4">INVOICE</div>
-            <div className="grid grid-cols-[auto_auto] gap-x-3 gap-y-1 text-right justify-end">
-              <span className="text-slate-500">Invoice #</span>
-              <span className="font-medium text-slate-900">{invoiceNumber}</span>
-              <span className="text-slate-500">Issued</span>
-              <span className="font-medium text-slate-900">{issueDateText || '—'}</span>
-              <span className="text-slate-500">Due</span>
-              <span className="font-medium text-slate-900">{dueDateText || '—'}</span>
-            </div>
-          </div>
+    <div ref={containerRef} className="w-full">
+      <div
+        className="relative overflow-hidden rounded-lg bg-white shadow-xl ring-1 ring-slate-900/5"
+        style={{
+          width: '100%',
+          paddingBottom: `${(1123 / A4_WIDTH) * 100}%`, // A4 aspect ratio
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: `${A4_WIDTH}px`,
+            height: '1123px',
+            transform: `scale(${scale})`,
+            transformOrigin: 'top left',
+          }}
+        >
+          <iframe
+            ref={iframeRef}
+            title="Invoice Preview"
+            style={{
+              width: '100%',
+              height: '100%',
+              border: 'none',
+              display: 'block',
+            }}
+          />
         </div>
 
-        {/* Bill To */}
-        <div className="mb-8 p-4 bg-slate-50 rounded-md border border-slate-100">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">BILL TO</div>
-          {selectedCustomer ? (
-            <>
-              <div className="font-bold text-slate-900 text-sm mb-0.5">{selectedCustomer.name}</div>
-              {selectedCustomer.company_name && <div className="text-slate-600">{selectedCustomer.company_name}</div>}
-              {selectedCustomer.email && <div className="text-slate-600">{selectedCustomer.email}</div>}
-              {selectedCustomer.address && (
-                <div className="text-slate-600 whitespace-pre-line mt-1">
-                  {selectedCustomer.address}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="text-slate-400 italic">Select a customer…</div>
-          )}
-        </div>
-
-        {/* Line Items Table */}
-        <div className="mb-8">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200">
-                <th className="py-2 px-1 text-slate-500 font-semibold w-[8%]">#</th>
-                <th className="py-2 px-1 text-slate-500 font-semibold w-[42%]">Item</th>
-                <th className="py-2 px-1 text-slate-500 font-semibold w-[12%] text-right">Qty</th>
-                <th className="py-2 px-1 text-slate-500 font-semibold w-[18%] text-right">Rate</th>
-                <th className="py-2 px-1 text-slate-500 font-semibold w-[20%] text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {computed.itemLines.length > 0 && computed.itemLines.some(l => l.name) ? (
-                computed.itemLines.map((line, i) => (
-                  line.name ? (
-                    <tr key={i}>
-                      <td className="py-3 px-1 text-slate-400 align-top">{i + 1}</td>
-                      <td className="py-3 px-1 align-top">
-                        <div className="font-medium text-slate-900">{line.name}</div>
-                        {line.description && (
-                          <div className="text-slate-500 text-xs mt-0.5">{line.description}</div>
-                        )}
-                      </td>
-                      <td className="py-3 px-1 align-top text-right text-slate-600">
-                        {line.type === 'service' ? '—' : line.quantity}
-                      </td>
-                      <td className="py-3 px-1 align-top text-right text-slate-600">{inr(line.rate)}</td>
-                      <td className="py-3 px-1 align-top text-right font-semibold text-slate-900">
-                        {inr(line.amount)}
-                      </td>
-                    </tr>
-                  ) : null
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-400 italic">
-                    Add items to see them here
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Totals */}
-        <div className="flex justify-end mb-8">
-          <div className="w-1/2 min-w-[200px]">
-            <div className="flex justify-between py-1.5 text-slate-600">
-              <span>Subtotal</span>
-              <span>{inr(computed.subtotal)}</span>
-            </div>
-            {computed.discountAmount > 0 && (
-              <div className="flex justify-between py-1.5 text-emerald-600">
-                <span>Discount{computed.discountType === 'percent' ? ` (${computed.discountValue}%)` : ''}</span>
-                <span>− {inr(computed.discountAmount)}</span>
-              </div>
-            )}
-            {computed.taxes.length > 0 && computed.taxes.map((t, i) => (
-              <div key={i} className="flex justify-between py-1.5 text-slate-600">
-                <span>{t.name} ({t.rate}%)</span>
-                <span>{inr(t.amount)}</span>
-              </div>
-            ))}
-            <div className="flex justify-between py-3 mt-1 border-t-2 border-slate-800 font-bold text-slate-900 text-sm">
-              <span>Total Due</span>
-              <span>{inr(computed.total)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Spacer to push notes to bottom if short */}
-        <div className="flex-1" />
-
-        {/* Notes */}
-        {notes && (
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">NOTES / TERMS</div>
-            <div className="text-slate-500 text-xs">{notes}</div>
+        {/* Loading overlay */}
+        {loading && (
+          <div className="absolute inset-0 bg-white/60 flex items-center justify-center z-10">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
         )}
       </div>
-
-      {/* Footer stripe */}
-      <div className="bg-slate-50 p-4 text-center text-slate-400 text-xs border-t border-slate-100 italic">
-        Thank you for your business
-      </div>
+      {error && (
+        <div className="mt-2 text-xs text-destructive">{error}</div>
+      )}
     </div>
   );
 }
@@ -1020,18 +965,28 @@ export default function InvoiceBuilder() {
                 </span>
               </div>
               
-              <div className="rounded-lg overflow-hidden shadow-xl ring-1 ring-slate-900/5 bg-slate-100 p-1">
-                <InvoicePreview
-                  settings={settings}
-                  selectedCustomer={selectedCustomer}
-                  invoiceNumber={invoiceNumber}
-                  issueDateText={formatDate(issueDate)}
-                  dueDateText={formatDate(dueDate)}
-                  status={status}
-                  computed={computed}
-                  notes={notes}
-                />
-              </div>
+              <LivePdfPreview
+                formData={{
+                  customer_id: customerId ? Number(customerId) : null,
+                  invoice_number: invoiceNumber,
+                  issue_date: issueDate,
+                  due_date: dueDate,
+                  status,
+                  discount: Number(discount) || 0,
+                  discount_type: discountType,
+                  taxes: taxes.filter(t => t.name && Number(t.rate) > 0),
+                  notes,
+                  items: lines
+                    .filter(l => l.name.trim())
+                    .map(l => ({
+                      item_id: l.item_id ? Number(l.item_id) : null,
+                      name: l.name.trim(),
+                      description: l.description || '',
+                      quantity: l.type === 'service' ? 1 : l.quantity,
+                      rate: l.rate,
+                    })),
+                }}
+              />
             </div>
           </div>
         )}

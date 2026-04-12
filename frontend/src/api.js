@@ -41,6 +41,23 @@ export async function downloadPdf(invoiceId, filename) {
   URL.revokeObjectURL(url);
 }
 
+export async function previewHtml(formData) {
+  const token = getToken();
+  const res = await fetch(`${BASE}/invoices/preview-html`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(formData),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Preview generation failed');
+  }
+  return res.text();
+}
+
 export const getProfile = () => api('/auth/profile');
 export const updateProfile = (data) => api('/auth/profile', { method: 'PUT', body: data });
 export const uploadLogo = (logo) => api('/auth/profile/logo', { method: 'POST', body: { logo } });
