@@ -1,14 +1,30 @@
-const Database = require('better-sqlite3');
-const path = require('path');
+const { Pool } = require('pg');
 
-const DB_PATH = process.env.DB_PATH
-  ? path.resolve(process.env.DB_PATH)
-  : path.join(__dirname, 'payflux.db');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+});
 
-const db = new Database(DB_PATH);
+/**
+ * Get a dedicated client for transaction blocks.
+ * Usage:
+ *   const client = await getClient();
+ *   try {
+ *     await client.query('BEGIN');
+ *     // ... queries ...
+ *     await client.query('COMMIT');
+ *   } catch (e) {
+ *     await client.query('ROLLBACK');
+ *     throw e;
+ *   } finally {
+ *     client.release();
+ *   }
+ */
+async function getClient() {
+  return pool.connect();
+}
 
-// Performance tuning: WAL mode for concurrent reads, foreign keys enforced
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-
-module.exports = db;
+module.exports = { pool, getClient };

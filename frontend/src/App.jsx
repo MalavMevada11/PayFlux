@@ -11,6 +11,8 @@ import Items from './pages/Items';
 import InvoiceBuilder from './pages/InvoiceBuilder';
 import InvoiceDetail from './pages/InvoiceDetail';
 import Profile from './pages/Profile';
+import CustomerDetail from './pages/CustomerDetail';
+import ItemDetail from './pages/ItemDetail';
 
 
 function PrivateLayout({ children }) {
@@ -159,7 +161,9 @@ export default function App() {
       <Route path="/invoices/create" element={<PrivateLayout><InvoiceBuilder /></PrivateLayout>} />
       <Route path="/invoices/new" element={<Navigate to="/invoices/create" replace />} />
       <Route path="/customers" element={<PrivateLayout><Customers /></PrivateLayout>} />
+      <Route path="/customers/:id" element={<PrivateLayout><CustomerDetail /></PrivateLayout>} />
       <Route path="/items" element={<PrivateLayout><Items /></PrivateLayout>} />
+      <Route path="/items/:id" element={<PrivateLayout><ItemDetail /></PrivateLayout>} />
       <Route path="/invoices/:id" element={<PrivateLayout><InvoiceDetail /></PrivateLayout>} />
       <Route path="/invoices/:id/edit" element={<PrivateLayout><InvoiceBuilder /></PrivateLayout>} />
       <Route path="/profile" element={<PrivateLayout><Profile /></PrivateLayout>} />

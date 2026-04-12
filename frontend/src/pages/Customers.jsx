@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -13,6 +14,7 @@ function getInitials(name) {
 }
 
 export default function Customers() {
+  const nav = useNavigate();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -102,7 +104,8 @@ export default function Customers() {
           <p className="text-muted-foreground mt-1">{rows.length} customer{rows.length !== 1 ? 's' : ''}</p>
         </div>
         <Button onClick={startNew}>
-          <Plus className="mr-2 h-4 w-4" /> Add Customer
+          <Plus className="mr-2 h-4 w-4" />
+          <span>Add Customer</span>
         </Button>
       </div>
 
@@ -182,7 +185,8 @@ export default function Customers() {
           <h3 className="text-lg font-semibold">No customers yet</h3>
           <p className="text-sm text-muted-foreground mb-4 mt-2">Add your first customer to start creating invoices.</p>
           <Button onClick={startNew}>
-            <Plus className="mr-2 h-4 w-4" /> Add Customer
+            <Plus className="mr-2 h-4 w-4" />
+            <span>Add Customer</span>
           </Button>
         </Card>
       )}
@@ -203,7 +207,7 @@ export default function Customers() {
               </thead>
               <tbody className="divide-y">
                 {rows.map((r) => (
-                  <tr key={r.id} className="hover:bg-muted/50 transition-colors">
+                  <tr key={r.id} className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => nav(`/customers/${r.id}`)}>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-xs uppercase">
@@ -222,10 +226,10 @@ export default function Customers() {
                     <td className="px-6 py-4 text-muted-foreground">{r.company_name || '—'}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => startEdit(r)} title="Edit">
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); startEdit(r); }} title="Edit">
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(r.id)} className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Delete">
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDelete(r.id); }} className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Delete">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>

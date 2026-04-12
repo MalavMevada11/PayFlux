@@ -194,17 +194,18 @@ export default function InvoiceDetail() {
             ))}
           </select>
           <Button variant="outline" asChild>
-            <Link to={`/invoices/${id}/edit`}>
-              <Edit className="mr-2 h-4 w-4" /> Edit
+            <Link to={`/invoices/${id}/edit`} className="inline-flex items-center">
+              <Edit className="mr-2 h-4 w-4" />
+              <span>Edit</span>
             </Link>
           </Button>
           <Button variant="outline" onClick={handlePdf} disabled={pdfBusy}>
             <FileDown className="mr-2 h-4 w-4" /> 
-            {pdfBusy ? 'Generating…' : 'Download PDF'}
+            <span>{pdfBusy ? 'Generating…' : 'Download PDF'}</span>
           </Button>
           <Button variant="destructive" onClick={handleDelete} disabled={deleteBusy}>
             <Trash2 className="mr-2 h-4 w-4" />
-            {deleteBusy ? 'Deleting…' : 'Delete'}
+            <span>{deleteBusy ? 'Deleting…' : 'Delete'}</span>
           </Button>
         </div>
       </div>
@@ -291,10 +292,19 @@ export default function InvoiceDetail() {
                 </div>
                 {Number(inv.discount) > 0 && (
                   <div className="flex justify-between text-sm text-emerald-600">
-                    <span>Discount</span>
-                    <span>− {inr(inv.discount)}</span>
+                    <span>Discount{inv.discount_type === 'percent' ? ` (${Number(inv.discount)}%)` : ''}</span>
+                    <span>− {inv.discount_type === 'percent'
+                      ? inr(parseFloat(inv.subtotal) * parseFloat(inv.discount) / 100)
+                      : inr(inv.discount)
+                    }</span>
                   </div>
                 )}
+                {(inv.taxes || []).length > 0 && (inv.taxes || []).map((t, i) => (
+                  <div key={t.id || i} className="flex justify-between text-sm text-muted-foreground">
+                    <span>{t.name} ({Number(t.rate)}%)</span>
+                    <span>{inr(t.amount)}</span>
+                  </div>
+                ))}
                 <div className="flex justify-between items-center border-t border-border pt-3 font-bold text-lg">
                   <span>Total</span>
                   <span>{inr(inv.total)}</span>
@@ -317,8 +327,9 @@ export default function InvoiceDetail() {
 
           <div className="flex pt-4">
             <Button variant="ghost" asChild className="text-muted-foreground">
-              <Link to="/invoices">
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Invoices
+              <Link to="/invoices" className="inline-flex items-center">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                <span>Back to Invoices</span>
               </Link>
             </Button>
           </div>
@@ -467,13 +478,19 @@ export default function InvoiceDetail() {
                     </div>
                   )}
 
-                  <Button type="submit" className="w-full" disabled={payBusy}>
-                    {payBusy ? (
-                      <><div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent" /> Recording…</>
-                    ) : (
-                      <><Plus className="mr-2 h-4 w-4" /> Record Payment</>
-                    )}
-                  </Button>
+                    <Button type="submit" className="w-full" disabled={payBusy}>
+                      {payBusy ? (
+                        <>
+                          <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                          <span>Recording…</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="mr-2 h-4 w-4" />
+                          <span>Record Payment</span>
+                        </>
+                      )}
+                    </Button>
                 </form>
               </CardContent>
             </Card>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -13,6 +14,7 @@ function inr(n) {
 }
 
 export default function Items() {
+  const nav = useNavigate();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -101,7 +103,8 @@ export default function Items() {
           <p className="text-muted-foreground mt-1">{rows.length} item{rows.length !== 1 ? 's' : ''} in catalog</p>
         </div>
         <Button onClick={startNew}>
-          <Plus className="mr-2 h-4 w-4" /> Add Item
+          <Plus className="mr-2 h-4 w-4" />
+          <span>Add Item</span>
         </Button>
       </div>
 
@@ -168,7 +171,8 @@ export default function Items() {
           <h3 className="text-lg font-semibold">No items yet</h3>
           <p className="text-sm text-muted-foreground mb-4 mt-2">Add reusable items or services to speed up invoice creation.</p>
           <Button onClick={startNew}>
-            <Plus className="mr-2 h-4 w-4" /> Add Item
+            <Plus className="mr-2 h-4 w-4" />
+            <span>Add Item</span>
           </Button>
         </Card>
       )}
@@ -188,7 +192,7 @@ export default function Items() {
               </thead>
               <tbody className="divide-y">
                 {rows.map((r) => (
-                  <tr key={r.id} className="hover:bg-muted/50 transition-colors">
+                  <tr key={r.id} className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => nav(`/items/${r.id}`)}>
                     <td className="px-6 py-4 font-medium">{r.name}</td>
                     <td className="px-6 py-4">
                       <Badge variant={r.type === 'goods' ? 'default' : 'secondary'}>
@@ -199,10 +203,10 @@ export default function Items() {
                     <td className="px-6 py-4 text-right font-semibold">{inr(r.price)}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => startEdit(r)} title="Edit">
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); startEdit(r); }} title="Edit">
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(r.id)} className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Delete">
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDelete(r.id); }} className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Delete">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>

@@ -7,7 +7,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
-import { Search, Plus, Trash2, FileText, Send, Eye, EyeOff, Settings } from 'lucide-react';
+import { Search, Plus, Trash2, FileText, Send, Eye, EyeOff, Settings, Percent, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 
 function todayISO() { return new Date().toISOString().slice(0, 10); }
@@ -88,7 +88,8 @@ function ItemCombobox({ value, onChange, onSelectCatalogItem, catalog, onAddNew 
                 if (onAddNew) onAddNew();
               }}
             >
-              <Plus className="mr-2 h-3.5 w-3.5" /> Add New Item
+              <Plus className="mr-2 h-3.5 w-3.5" />
+              <span>Add New Item</span>
             </Button>
           </div>
         </div>
@@ -175,7 +176,8 @@ function CustomerCombobox({ value, onChange, customers, onAddNew }) {
                 if (onAddNew) onAddNew();
               }}
             >
-              <Plus className="mr-2 h-3.5 w-3.5" /> Add New Customer
+              <Plus className="mr-2 h-3.5 w-3.5" />
+              <span>Add New Customer</span>
             </Button>
           </div>
         </div>
@@ -185,7 +187,7 @@ function CustomerCombobox({ value, onChange, customers, onAddNew }) {
 }
 
 /* ─── Live Preview Component ─────────────────────────────────────────── */
-function InvoicePreview({ settings, selectedCustomer, invoiceNumber, issueDateText, dueDateText, status, computed, discount, notes }) {
+function InvoicePreview({ settings, selectedCustomer, invoiceNumber, issueDateText, dueDateText, status, computed, notes }) {
   const isPng = settings?.logo?.startsWith('data:image/png');
 
   return (
@@ -301,12 +303,18 @@ function InvoicePreview({ settings, selectedCustomer, invoiceNumber, issueDateTe
               <span>Subtotal</span>
               <span>{inr(computed.subtotal)}</span>
             </div>
-            {Number(discount) > 0 && (
+            {computed.discountAmount > 0 && (
               <div className="flex justify-between py-1.5 text-emerald-600">
-                <span>Discount</span>
-                <span>− {inr(discount)}</span>
+                <span>Discount{computed.discountType === 'percent' ? ` (${computed.discountValue}%)` : ''}</span>
+                <span>− {inr(computed.discountAmount)}</span>
               </div>
             )}
+            {computed.taxes.length > 0 && computed.taxes.map((t, i) => (
+              <div key={i} className="flex justify-between py-1.5 text-slate-600">
+                <span>{t.name} ({t.rate}%)</span>
+                <span>{inr(t.amount)}</span>
+              </div>
+            ))}
             <div className="flex justify-between py-3 mt-1 border-t-2 border-slate-800 font-bold text-slate-900 text-sm">
               <span>Total Due</span>
               <span>{inr(computed.total)}</span>
@@ -353,6 +361,8 @@ export default function InvoiceBuilder() {
   
   const [status, setStatus]           = useState('draft');
   const [discount, setDiscount]       = useState(0);
+  const [discountType, setDiscountType] = useState('flat'); // 'flat' | 'percent'
+  const [taxes, setTaxes]             = useState([]); // [{name, rate}]
   const [notes, setNotes]             = useState('Thank you for your business. Please make payment within 30 days. Contact us with any questions regarding this invoice.');
   const [lines, setLines]             = useState([emptyLine()]);
   const [loading, setLoading]         = useState(true);
@@ -487,6 +497,8 @@ export default function InvoiceBuilder() {
           setDueDate(inv.due_date.substring(0, 10));
           setStatus(inv.status);
           setDiscount(Number(inv.discount));
+          setDiscountType(inv.discount_type || 'flat');
+          setTaxes((inv.taxes || []).map(t => ({ name: t.name, rate: Number(t.rate) })));
           setNotes(inv.notes || '');
           setLines((inv.items && inv.items.length > 0 ? inv.items : [emptyLine()]).map((l) => ({
             item_id: l.item_id ? String(l.item_id) : '',
@@ -511,10 +523,23 @@ export default function InvoiceBuilder() {
       return { ...l, amount };
     });
     const subtotal = round2(itemLines.reduce((s, l) => s + l.amount, 0));
-    const disc = round2(Number(discount) || 0);
-    const total = round2(Math.max(0, subtotal - disc));
-    return { itemLines, subtotal, total };
-  }, [lines, discount]);
+    const discVal = round2(Number(discount) || 0);
+    let discountAmount;
+    if (discountType === 'percent') {
+      discountAmount = round2(subtotal * Math.min(discVal, 100) / 100);
+    } else {
+      discountAmount = round2(Math.min(discVal, subtotal));
+    }
+    const taxableAmount = round2(Math.max(0, subtotal - discountAmount));
+    const computedTaxes = taxes.map(t => {
+      const rate = round2(Number(t.rate) || 0);
+      const amount = round2(taxableAmount * rate / 100);
+      return { name: t.name, rate, amount };
+    });
+    const totalTax = round2(computedTaxes.reduce((s, t) => s + t.amount, 0));
+    const total = round2(taxableAmount + totalTax);
+    return { itemLines, subtotal, discountAmount, discountValue: discVal, discountType, taxes: computedTaxes, totalTax, taxableAmount, total };
+  }, [lines, discount, discountType, taxes]);
 
   function updateLine(i, patch) {
     setLines((prev) => prev.map((row, j) => (j === i ? { ...row, ...patch } : row)));
@@ -558,6 +583,8 @@ export default function InvoiceBuilder() {
         due_date: parsedDueDate,
         status: overrideStatus || status,
         discount: Number(discount) || 0,
+        discount_type: discountType,
+        taxes: taxes.filter(t => t.name && Number(t.rate) > 0),
         notes,
         items: payloadItems,
       };
@@ -566,7 +593,7 @@ export default function InvoiceBuilder() {
       } else {
         await api('/invoices', { method: 'POST', body });
       }
-      nav('/');
+      nav('/invoices');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -778,21 +805,187 @@ export default function InvoiceBuilder() {
                     onClick={addRow} 
                     className="mt-4 border-dashed bg-secondary/20 hover:bg-secondary/60"
                   >
-                    <Plus className="mr-2 h-4 w-4" /> Add Line Item
+                    <Plus className="mr-2 h-4 w-4" />
+                    <span>Add Line Item</span>
                   </Button>
                 </div>
 
-                {/* Discount */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-                  <div className="grid gap-2">
-                    <Label>Additional Discount (₹)</Label>
+              </CardContent>
+            </Card>
+
+            {/* ─── Totals Summary Card ──────────────────────────────── */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {/* Subtotal */}
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground font-medium">Subtotal</span>
+                  <span className="font-semibold text-base">{inr(computed.subtotal)}</span>
+                </div>
+
+                {/* ── Discount Section ─────────────────────────── */}
+                <div className="space-y-3 p-4 rounded-lg bg-secondary/30 border border-border/50">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold">Discount</Label>
+                    {/* ₹ / % toggle */}
+                    <div className="flex items-center bg-background rounded-md border border-input overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => { setDiscountType('flat'); }}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${discountType === 'flat' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      >₹</button>
+                      <button
+                        type="button"
+                        onClick={() => { setDiscountType('percent'); }}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${discountType === 'percent' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      >%</button>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 items-center">
                     <Input
                       type="number" min="0" step="0.01"
+                      max={discountType === 'percent' ? 100 : undefined}
                       placeholder="0.00"
                       value={discount || ''}
                       onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
+                      className="flex-1"
                     />
+                    {discountType === 'percent' && (
+                      <span className="text-sm text-muted-foreground font-medium shrink-0">= {inr(computed.discountAmount)}</span>
+                    )}
                   </div>
+                  {/* Quick discount presets */}
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[10, 20, 50].map(pct => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => { setDiscountType('percent'); setDiscount(pct); }}
+                        className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${
+                          discountType === 'percent' && discount === pct
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background border-input text-muted-foreground hover:text-foreground hover:border-foreground/30'
+                        }`}
+                      >{pct}%</button>
+                    ))}
+                    {Number(discount) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => { setDiscount(0); }}
+                        className="px-2 py-1 text-xs font-medium rounded-md text-destructive hover:bg-destructive/10 transition-colors"
+                      >Clear</button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Show discount result */}
+                {computed.discountAmount > 0 && (
+                  <div className="flex justify-between items-center text-sm text-emerald-600">
+                    <span>Discount {discountType === 'percent' ? `(${discount}%)` : ''}</span>
+                    <span className="font-medium">− {inr(computed.discountAmount)}</span>
+                  </div>
+                )}
+
+                {/* Taxable Amount (shown when there's discount or taxes) */}
+                {(computed.discountAmount > 0 || taxes.length > 0) && (
+                  <div className="flex justify-between items-center text-sm border-t pt-3">
+                    <span className="text-muted-foreground font-medium">Taxable Amount</span>
+                    <span className="font-semibold">{inr(computed.taxableAmount)}</span>
+                  </div>
+                )}
+
+                {/* ── Tax Section ──────────────────────────────── */}
+                <div className="space-y-3 p-4 rounded-lg bg-secondary/30 border border-border/50">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold">Taxes</Label>
+                    <span className="text-xs text-muted-foreground">{taxes.length === 0 ? 'None' : `${taxes.length} tax${taxes.length > 1 ? 'es' : ''}`}</span>
+                  </div>
+
+                  {/* Tax rows */}
+                  {taxes.map((t, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input
+                        placeholder="Tax name (e.g. CGST)"
+                        value={t.name}
+                        onChange={(e) => setTaxes(prev => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
+                        className="flex-1 h-9 text-sm"
+                      />
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Input
+                          type="number" min="0" step="0.01" max="100"
+                          placeholder="%"
+                          value={t.rate || ''}
+                          onChange={(e) => setTaxes(prev => prev.map((x, j) => j === i ? { ...x, rate: parseFloat(e.target.value) || 0 } : x))}
+                          className="w-20 h-9 text-sm text-right"
+                        />
+                        <span className="text-xs text-muted-foreground">%</span>
+                      </div>
+                      <span className="text-sm font-medium text-muted-foreground w-24 text-right shrink-0">
+                        {inr(computed.taxes[i]?.amount ?? 0)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setTaxes(prev => prev.filter((_, j) => j !== i))}
+                        className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* Quick-add tax presets */}
+                  <div className="flex gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setTaxes(prev => [...prev, { name: '', rate: 0 }])}
+                      className="px-2.5 py-1 text-xs font-medium rounded-md border border-dashed border-input bg-background text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors inline-flex items-center gap-1"
+                    >
+                      <Plus className="h-3 w-3" /> Custom
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTaxes(prev => [...prev, { name: 'CGST', rate: 2.5 }, { name: 'SGST', rate: 2.5 }])}
+                      className="px-2.5 py-1 text-xs font-medium rounded-md border bg-background border-input text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+                    >GST 5%</button>
+                    <button
+                      type="button"
+                      onClick={() => setTaxes(prev => [...prev, { name: 'CGST', rate: 6 }, { name: 'SGST', rate: 6 }])}
+                      className="px-2.5 py-1 text-xs font-medium rounded-md border bg-background border-input text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+                    >GST 12%</button>
+                    <button
+                      type="button"
+                      onClick={() => setTaxes(prev => [...prev, { name: 'CGST', rate: 9 }, { name: 'SGST', rate: 9 }])}
+                      className="px-2.5 py-1 text-xs font-medium rounded-md border bg-background border-input text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+                    >GST 18%</button>
+                    <button
+                      type="button"
+                      onClick={() => setTaxes(prev => [...prev, { name: 'IGST', rate: 18 }])}
+                      className="px-2.5 py-1 text-xs font-medium rounded-md border bg-background border-input text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+                    >IGST 18%</button>
+                    {taxes.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setTaxes([])}
+                        className="px-2 py-1 text-xs font-medium rounded-md text-destructive hover:bg-destructive/10 transition-colors"
+                      >Clear All</button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tax subtotals */}
+                {computed.taxes.length > 0 && computed.taxes.map((t, i) => (
+                  <div key={i} className="flex justify-between items-center text-sm text-muted-foreground">
+                    <span>{t.name} ({t.rate}%)</span>
+                    <span className="font-medium">{inr(t.amount)}</span>
+                  </div>
+                ))}
+
+                {/* ═══ Grand Total ═══ */}
+                <div className="flex justify-between items-center pt-4 border-t-2 border-foreground/80">
+                  <span className="text-base font-bold">Total</span>
+                  <span className="text-xl font-bold">{inr(computed.total)}</span>
                 </div>
               </CardContent>
             </Card>
@@ -836,7 +1029,6 @@ export default function InvoiceBuilder() {
                   dueDateText={formatDate(dueDate)}
                   status={status}
                   computed={computed}
-                  discount={discount}
                   notes={notes}
                 />
               </div>

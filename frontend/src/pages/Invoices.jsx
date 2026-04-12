@@ -126,8 +126,9 @@ export default function Invoices() {
           </p>
         </div>
         <Button asChild>
-          <Link to="/invoices/create">
-            <Plus className="mr-2 h-4 w-4" /> New Invoice
+          <Link to="/invoices/create" className="inline-flex items-center">
+            <Plus className="mr-2 h-4 w-4" />
+            <span>New Invoice</span>
           </Link>
         </Button>
       </div>
@@ -221,8 +222,9 @@ export default function Invoices() {
           <h3 className="text-lg font-semibold">No invoices yet</h3>
           <p className="text-sm text-muted-foreground mb-4 mt-2">Create your first invoice to get started.</p>
           <Button asChild>
-            <Link to="/invoices/create">
-              <Plus className="mr-2 h-4 w-4" /> New Invoice
+            <Link to="/invoices/create" className="inline-flex items-center">
+              <Plus className="mr-2 h-4 w-4" />
+              <span>New Invoice</span>
             </Link>
           </Button>
         </Card>

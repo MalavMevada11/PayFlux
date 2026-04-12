@@ -1,4 +1,4 @@
-const db = require('../db');
+const { pool, getClient } = require('../db');
 
 function roundMoney(n) {
   return Math.round(n * 100) / 100;
@@ -6,27 +6,47 @@ function roundMoney(n) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
-function getInvoiceForUser(userId, invoiceId) {
-  return db.prepare('SELECT * FROM invoices WHERE id = ? AND user_id = ?').get(invoiceId, userId);
+async function getInvoiceForUser(userId, invoiceId) {
+  const { rows } = await pool.query(
+    'SELECT * FROM invoices WHERE id = $1 AND user_id = $2',
+    [invoiceId, userId]
+  );
+  return rows[0] || null;
 }
 
-function getPaymentsForInvoice(invoiceId) {
-  return db.prepare('SELECT * FROM payments WHERE invoice_id = ? ORDER BY date ASC, id ASC').all(invoiceId);
+async function getPaymentsForInvoice(invoiceId) {
+  const { rows } = await pool.query(
+    'SELECT * FROM payments WHERE invoice_id = $1 ORDER BY date ASC, id ASC',
+    [invoiceId]
+  );
+  return rows;
 }
 
-function computeTotalPaid(invoiceId) {
-  const row = db.prepare('SELECT COALESCE(SUM(amount), 0) AS total_paid FROM payments WHERE invoice_id = ?').get(invoiceId);
-  return roundMoney(row.total_paid);
+async function computeTotalPaid(invoiceId) {
+  const { rows } = await pool.query(
+    'SELECT COALESCE(SUM(amount), 0) AS total_paid FROM payments WHERE invoice_id = $1',
+    [invoiceId]
+  );
+  return roundMoney(parseFloat(rows[0].total_paid));
 }
 
-function recomputeStatus(invoiceId) {
-  const invoice = db.prepare('SELECT total, status FROM invoices WHERE id = ?').get(invoiceId);
+async function recomputeStatus(client, invoiceId) {
+  const { rows: invRows } = await client.query(
+    'SELECT total, status FROM invoices WHERE id = $1',
+    [invoiceId]
+  );
+  const invoice = invRows[0];
   if (!invoice) return;
 
-  const totalPaid = computeTotalPaid(invoiceId);
+  const { rows: paidRows } = await client.query(
+    'SELECT COALESCE(SUM(amount), 0) AS total_paid FROM payments WHERE invoice_id = $1',
+    [invoiceId]
+  );
+  const totalPaid = roundMoney(parseFloat(paidRows[0].total_paid));
+
   let newStatus;
 
-  if (totalPaid >= invoice.total) {
+  if (totalPaid >= parseFloat(invoice.total)) {
     newStatus = 'paid';
   } else if (totalPaid > 0) {
     newStatus = 'partial';
@@ -40,27 +60,27 @@ function recomputeStatus(invoiceId) {
   }
 
   if (newStatus !== invoice.status) {
-    db.prepare('UPDATE invoices SET status = ? WHERE id = ?').run(newStatus, invoiceId);
+    await client.query('UPDATE invoices SET status = $1 WHERE id = $2', [newStatus, invoiceId]);
   }
 
   return newStatus;
 }
 
-function buildResponse(invoiceId, invoiceTotal) {
-  const payments = getPaymentsForInvoice(invoiceId);
-  const totalPaid = roundMoney(payments.reduce((s, p) => s + p.amount, 0));
-  const remaining = roundMoney(invoiceTotal - totalPaid);
+async function buildResponse(invoiceId, invoiceTotal) {
+  const payments = await getPaymentsForInvoice(invoiceId);
+  const totalPaid = roundMoney(payments.reduce((s, p) => s + parseFloat(p.amount), 0));
+  const remaining = roundMoney(parseFloat(invoiceTotal) - totalPaid);
   return { payments, totalPaid, remaining };
 }
 
 // ─── Handlers ─────────────────────────────────────────────────────────────
 
-function listPayments(req, res) {
+async function listPayments(req, res) {
   try {
-    const invoice = getInvoiceForUser(req.userId, req.params.invoiceId);
+    const invoice = await getInvoiceForUser(req.userId, req.params.invoiceId);
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
 
-    const result = buildResponse(invoice.id, invoice.total);
+    const result = await buildResponse(invoice.id, invoice.total);
     return res.json(result);
   } catch (err) {
     console.error(err);
@@ -68,9 +88,9 @@ function listPayments(req, res) {
   }
 }
 
-function addPayment(req, res) {
+async function addPayment(req, res) {
   try {
-    const invoice = getInvoiceForUser(req.userId, req.params.invoiceId);
+    const invoice = await getInvoiceForUser(req.userId, req.params.invoiceId);
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
 
     const { amount, method, date, note } = req.body || {};
@@ -82,8 +102,8 @@ function addPayment(req, res) {
     }
 
     // Check for overpayment
-    const currentPaid = computeTotalPaid(invoice.id);
-    const remaining = roundMoney(invoice.total - currentPaid);
+    const currentPaid = await computeTotalPaid(invoice.id);
+    const remaining = roundMoney(parseFloat(invoice.total) - currentPaid);
     if (roundMoney(parsedAmount) > remaining) {
       return res.status(400).json({
         error: `Payment exceeds remaining balance. Maximum allowed: ₹${remaining.toFixed(2)}`,
@@ -100,18 +120,32 @@ function addPayment(req, res) {
 
     const paymentNote = typeof note === 'string' ? note.trim() : '';
 
-    const txn = db.transaction(() => {
-      db.prepare(
-        'INSERT INTO payments (invoice_id, amount, method, date, note) VALUES (?, ?, ?, ?, ?)'
-      ).run(invoice.id, roundMoney(parsedAmount), paymentMethod, paymentDate, paymentNote);
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
 
-      recomputeStatus(invoice.id);
-    });
-    txn();
+      await client.query(
+        'INSERT INTO payments (invoice_id, amount, method, date, note) VALUES ($1, $2, $3, $4, $5)',
+        [invoice.id, roundMoney(parsedAmount), paymentMethod, paymentDate, paymentNote]
+      );
+
+      await recomputeStatus(client, invoice.id);
+
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
 
     // Return updated state
-    const updatedInvoice = db.prepare('SELECT total, status FROM invoices WHERE id = ?').get(invoice.id);
-    const result = buildResponse(invoice.id, updatedInvoice.total);
+    const { rows: updatedRows } = await pool.query(
+      'SELECT total, status FROM invoices WHERE id = $1',
+      [invoice.id]
+    );
+    const updatedInvoice = updatedRows[0];
+    const result = await buildResponse(invoice.id, updatedInvoice.total);
     return res.status(201).json({ ...result, status: updatedInvoice.status });
   } catch (err) {
     console.error(err);
@@ -119,23 +153,37 @@ function addPayment(req, res) {
   }
 }
 
-function deletePayment(req, res) {
+async function deletePayment(req, res) {
   try {
-    const invoice = getInvoiceForUser(req.userId, req.params.invoiceId);
+    const invoice = await getInvoiceForUser(req.userId, req.params.invoiceId);
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
 
     const paymentId = req.params.paymentId;
-    const payment = db.prepare('SELECT * FROM payments WHERE id = ? AND invoice_id = ?').get(paymentId, invoice.id);
-    if (!payment) return res.status(404).json({ error: 'Payment not found' });
+    const { rows: payRows } = await pool.query(
+      'SELECT * FROM payments WHERE id = $1 AND invoice_id = $2',
+      [paymentId, invoice.id]
+    );
+    if (payRows.length === 0) return res.status(404).json({ error: 'Payment not found' });
 
-    const txn = db.transaction(() => {
-      db.prepare('DELETE FROM payments WHERE id = ?').run(paymentId);
-      recomputeStatus(invoice.id);
-    });
-    txn();
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM payments WHERE id = $1', [paymentId]);
+      await recomputeStatus(client, invoice.id);
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
 
-    const updatedInvoice = db.prepare('SELECT total, status FROM invoices WHERE id = ?').get(invoice.id);
-    const result = buildResponse(invoice.id, updatedInvoice.total);
+    const { rows: updatedRows } = await pool.query(
+      'SELECT total, status FROM invoices WHERE id = $1',
+      [invoice.id]
+    );
+    const updatedInvoice = updatedRows[0];
+    const result = await buildResponse(invoice.id, updatedInvoice.total);
     return res.json({ ...result, status: updatedInvoice.status });
   } catch (err) {
     console.error(err);
