@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { initSchema } = require('./schema');
+const dns = require('dns');
 
 const authRoutes = require('./routes/auth');
 const customerRoutes = require('./routes/customers');
@@ -15,6 +16,7 @@ const { closeBrowser } = require('./browserPool');
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+dns.setDefaultResultOrder('ipv4first');
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '4mb' }));
 
