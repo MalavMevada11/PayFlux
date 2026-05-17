@@ -5,35 +5,90 @@ const { JWT_SECRET } = require('../middleware/auth');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function signToken(userId) {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
+function signToken(userId, role) {
+  return jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: '7d' });
 }
 
+const VALID_REGISTER_ROLES = ['business', 'customer'];
+
 async function register(req, res) {
-  const { email, password, first_name, last_name } = req.body || {};
+  const { email, password, first_name, last_name, role, invite_code } = req.body || {};
   if (!email || typeof email !== 'string' || !EMAIL_RE.test(email.trim())) {
     return res.status(400).json({ error: 'Valid email is required' });
   }
   if (!password || typeof password !== 'string' || password.length < 6) {
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
   }
+  const userRole = VALID_REGISTER_ROLES.includes(role) ? role : 'business';
   const normalized = email.trim().toLowerCase();
   const fname = (typeof first_name === 'string' ? first_name.trim() : '');
   const lname = (typeof last_name === 'string' ? last_name.trim() : '');
   const hash = await bcrypt.hash(password, 10);
   try {
     const { rows } = await pool.query(
-      'INSERT INTO users (email, password, first_name, last_name) VALUES ($1, $2, $3, $4) RETURNING id, email, first_name, last_name',
-      [normalized, hash, fname, lname]
+      'INSERT INTO users (email, password, first_name, last_name, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, first_name, last_name, role',
+      [normalized, hash, fname, lname, userRole]
     );
     const user = rows[0];
-    // Create empty settings row for the new user
-    await pool.query(
-      'INSERT INTO user_settings (user_id) VALUES ($1) ON CONFLICT DO NOTHING',
-      [user.id]
-    );
-    const token = signToken(user.id);
-    return res.status(201).json({ user: { id: user.id, email: user.email, first_name: user.first_name, last_name: user.last_name }, token });
+    // Create empty settings row for business users
+    if (userRole === 'business') {
+      await pool.query(
+        'INSERT INTO user_settings (user_id) VALUES ($1) ON CONFLICT DO NOTHING',
+        [user.id]
+      );
+    }
+    // If an invite code was provided during registration, try to auto-link
+    if (invite_code && typeof invite_code === 'string' && invite_code.trim()) {
+      try {
+        const inv = await pool.query(
+          `SELECT * FROM invitations WHERE code = $1 AND expires_at > NOW()`,
+          [invite_code.trim().toUpperCase()]
+        );
+        if (inv.rows.length > 0) {
+          const invitation = inv.rows[0];
+          let customerUserId, businessUserId;
+          // company_to_customer: inviter is business, new user must be customer
+          if (invitation.type === 'company_to_customer' && userRole === 'customer') {
+            customerUserId = user.id;
+            businessUserId = invitation.inviter_id;
+          }
+          // customer_to_company: inviter is customer, new user must be business
+          if (invitation.type === 'customer_to_company' && userRole === 'business') {
+            customerUserId = invitation.inviter_id;
+            businessUserId = user.id;
+          }
+          if (customerUserId && businessUserId) {
+            await pool.query(
+              `INSERT INTO customer_links (customer_user_id, business_user_id, company_code)
+               VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+              [customerUserId, businessUserId, invite_code.trim().toUpperCase()]
+            );
+            // Auto-add to business's customers table
+            const custUser = await pool.query(
+              `SELECT email, first_name, last_name FROM users WHERE id = $1`, [customerUserId]
+            );
+            if (custUser.rows.length > 0) {
+              const cu = custUser.rows[0];
+              const fullName = `${cu.first_name || ''} ${cu.last_name || ''}`.trim() || cu.email;
+              await pool.query(
+                `INSERT INTO customers (user_id, type, name, email, phone, company_name, address)
+                 SELECT $1, 'individual', $2, $3, '', '', ''
+                 WHERE NOT EXISTS (
+                   SELECT 1 FROM customers WHERE user_id = $1 AND LOWER(email) = LOWER($3)
+                 )`,
+                [businessUserId, fullName, cu.email]
+              );
+            }
+            // Delete invite code — one-time use
+            await pool.query(`DELETE FROM invitations WHERE id = $1`, [invitation.id]);
+          }
+        }
+      } catch (linkErr) {
+        console.error('Auto-link from invite code failed (non-fatal):', linkErr.message);
+      }
+    }
+    const token = signToken(user.id, user.role);
+    return res.status(201).json({ user: { id: user.id, email: user.email, first_name: user.first_name, last_name: user.last_name, role: user.role }, token });
   } catch (err) {
     if (err.message && (err.message.includes('unique') || err.message.includes('duplicate'))) {
       return res.status(409).json({ error: 'Email already registered' });
@@ -50,7 +105,7 @@ async function login(req, res) {
   }
   const normalized = email.trim().toLowerCase();
   const { rows } = await pool.query(
-    'SELECT id, email, password, first_name, last_name FROM users WHERE LOWER(email) = $1',
+    'SELECT id, email, password, first_name, last_name, role FROM users WHERE LOWER(email) = $1',
     [normalized]
   );
   const user = rows[0];
@@ -61,8 +116,8 @@ async function login(req, res) {
   if (!ok) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
-  const token = signToken(user.id);
-  return res.json({ user: { id: user.id, email: user.email, first_name: user.first_name, last_name: user.last_name }, token });
+  const token = signToken(user.id, user.role);
+  return res.json({ user: { id: user.id, email: user.email, first_name: user.first_name, last_name: user.last_name, role: user.role }, token });
 }
 
 async function getProfile(req, res) {

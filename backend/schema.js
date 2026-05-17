@@ -115,12 +115,63 @@ async function initSchema() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_payments_invoice_id ON payments(invoice_id);
+
+    -- ── RBAC: Customer-Business linking (M:N) ──
+    CREATE TABLE IF NOT EXISTS customer_links (
+      id                SERIAL PRIMARY KEY,
+      customer_user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      business_user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      company_code      TEXT    NOT NULL DEFAULT '',
+      status            TEXT    NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive')),
+      linked_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(customer_user_id, business_user_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_customer_links_customer ON customer_links(customer_user_id);
+    CREATE INDEX IF NOT EXISTS idx_customer_links_business ON customer_links(business_user_id);
+
+    -- ── RBAC: Invitation codes ──
+    CREATE TABLE IF NOT EXISTS invitations (
+      id              SERIAL PRIMARY KEY,
+      code            TEXT    NOT NULL UNIQUE,
+      type            TEXT    NOT NULL CHECK (type IN ('company_to_customer','customer_to_company')),
+      inviter_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      invitee_email   TEXT,
+      used_by         INTEGER REFERENCES users(id),
+      used_at         TIMESTAMPTZ,
+      expires_at      TIMESTAMPTZ NOT NULL,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_invitations_code ON invitations(code);
+    CREATE INDEX IF NOT EXISTS idx_invitations_inviter ON invitations(inviter_id);
+
+    -- ── Phase B: Payment requests ──
+    CREATE TABLE IF NOT EXISTS payment_requests (
+      id                SERIAL PRIMARY KEY,
+      invoice_id        INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+      business_user_id  INTEGER NOT NULL REFERENCES users(id),
+      customer_user_id  INTEGER NOT NULL REFERENCES users(id),
+      amount            NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+      message           TEXT NOT NULL DEFAULT '',
+      status            TEXT NOT NULL DEFAULT 'pending'
+                          CHECK (status IN ('pending','paid','cancelled','expired')),
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_payment_requests_customer ON payment_requests(customer_user_id);
+    CREATE INDEX IF NOT EXISTS idx_payment_requests_invoice ON payment_requests(invoice_id);
   `);
 
   // Migrations for existing databases — safe to re-run
   const migrations = [
     `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS discount_type TEXT NOT NULL DEFAULT 'flat'`,
     `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS tax_amount NUMERIC(12,2) NOT NULL DEFAULT 0`,
+    // Phase A: RBAC role column
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'business'`,
+    // Phase D: Razorpay keys per business
+    `ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS razorpay_key_id TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS razorpay_key_secret_enc TEXT NOT NULL DEFAULT ''`,
   ];
   for (const sql of migrations) {
     try { await pool.query(sql); } catch (e) { /* column may already exist */ }

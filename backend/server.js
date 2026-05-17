@@ -10,7 +10,13 @@ const itemRoutes = require('./routes/items');
 const invoiceRoutes = require('./routes/invoices');
 const paymentRoutes = require('./routes/payments');
 const analyticsRoutes = require('./routes/analytics');
+const linkRoutes = require('./routes/links');
+const adminRoutes = require('./routes/admin');
+const portalRoutes = require('./routes/portal');
+const razorpayRoutes = require('./routes/razorpay');
 
+const { authMiddleware } = require('./middleware/auth');
+const { requireRole } = require('./middleware/rbac');
 const { closeBrowser } = require('./browserPool');
 
 const app = express();
@@ -22,12 +28,27 @@ app.use(express.json({ limit: '4mb' }));
 
 app.get('/health', (req, res) => res.json({ ok: true, db: 'postgres' }));
 
+// ── Public auth routes (login, register) ──
 app.use('/auth', authRoutes);
-app.use('/customers', customerRoutes);
-app.use('/items', itemRoutes);
-app.use('/invoices', invoiceRoutes);
-app.use('/invoices', paymentRoutes);
-app.use('/analytics', analyticsRoutes);
+
+// ── Business routes (admin + business can access) ──
+app.use('/customers', authMiddleware, requireRole('admin', 'business'), customerRoutes);
+app.use('/items', authMiddleware, requireRole('admin', 'business'), itemRoutes);
+app.use('/invoices', authMiddleware, requireRole('admin', 'business'), invoiceRoutes);
+app.use('/invoices', authMiddleware, requireRole('admin', 'business'), paymentRoutes);
+app.use('/analytics', authMiddleware, requireRole('admin', 'business'), analyticsRoutes);
+
+// ── Link management (business + customer) ──
+app.use('/links', linkRoutes);
+
+// ── Admin panel ──
+app.use('/admin', adminRoutes);
+
+// ── Customer portal ──
+app.use('/portal', portalRoutes);
+
+// ── Razorpay payment gateway ──
+app.use('/razorpay', razorpayRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 

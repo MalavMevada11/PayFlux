@@ -1,9 +1,7 @@
 const express = require('express');
-const { authMiddleware } = require('../middleware/auth');
 const invoice = require('../controllers/invoiceController');
 
 const router = express.Router();
-router.use(authMiddleware);
 router.post('/', invoice.create);
 router.get('/', invoice.list);
 router.get('/next-number', invoice.getNextNumber);

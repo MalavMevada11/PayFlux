@@ -38,11 +38,17 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const role = user?.role || null;
+
   const value = useMemo(
     () => ({
       user,
       token,
+      role,
       isAuthenticated: !!token,
+      isAdmin: role === 'admin',
+      isBusiness: role === 'business',
+      isCustomer: role === 'customer',
       login,
       logout,
     }),
@@ -57,3 +63,4 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth outside AuthProvider');
   return ctx;
 }
+

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { getProfile, updateProfile, uploadLogo } from '../api';
+import { getProfile, updateProfile, uploadLogo, api } from '../api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Upload, Trash2, Lightbulb, LogOut, Building2, Smartphone, QrCode } from 'lucide-react';
+import { Upload, Trash2, Lightbulb, LogOut, Building2, Smartphone, QrCode, Key, Shield, Zap } from 'lucide-react';
 import { useAuth } from '../authContext';
 
 export default function Profile() {
@@ -45,6 +45,15 @@ export default function Profile() {
   const [upiQrSuccess, setUpiQrSuccess] = useState('');
   const qrFileInputRef = useRef(null);
 
+  // Razorpay state
+  const [rzpKeyId, setRzpKeyId] = useState('');
+  const [rzpKeySecret, setRzpKeySecret] = useState('');
+  const [rzpConfigured, setRzpConfigured] = useState(false);
+  const [rzpMaskedKey, setRzpMaskedKey] = useState('');
+  const [rzpSaving, setRzpSaving] = useState(false);
+  const [rzpError, setRzpError] = useState('');
+  const [rzpSuccess, setRzpSuccess] = useState('');
+
   // All settings reference (for preserving fields on partial saves)
   const allSettingsRef = useRef({});
 
@@ -69,6 +78,12 @@ export default function Profile() {
         });
         setLogoPreview(data.logo || '');
         setUpiQrPreview(data.upi_qr || '');
+        // Razorpay status
+        try {
+          const rzpStatus = await api('/razorpay/status');
+          setRzpConfigured(rzpStatus.configured);
+          setRzpMaskedKey(rzpStatus.key_id || '');
+        } catch (_) { /* not configured */ }
       } catch (e) {
         setError(e.message);
       } finally {
@@ -524,13 +539,79 @@ export default function Profile() {
             </CardContent>
           </Card>
 
-          <Card className="bg-amber-50/60 border-amber-200/50">
-            <CardContent className="flex gap-3 p-4">
-              <Lightbulb className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-              <div className="text-sm text-amber-900/80 leading-relaxed">
-                <strong>Coming soon:</strong> Bank details and UPI information will appear in your PDF invoices,
-                making it easier for customers to pay you directly.
-              </div>
+          {/* ── Razorpay Gateway ─────────────────────────────────── */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-blue-600" />
+                Payment Gateway
+              </CardTitle>
+              <CardDescription>Configure Razorpay to accept online payments from customers</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {rzpError && <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{rzpError}</div>}
+              {rzpSuccess && <div className="mb-4 rounded-md bg-emerald-100 p-3 text-sm text-emerald-700">{rzpSuccess}</div>}
+
+              {rzpConfigured ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-200">
+                    <Shield className="h-5 w-5 text-green-600" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-green-700">Razorpay Connected</p>
+                      <p className="text-xs text-green-600 font-mono">{rzpMaskedKey}</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:bg-destructive/10"
+                    onClick={async () => {
+                      setRzpError(''); setRzpSuccess('');
+                      try {
+                        await api('/razorpay/keys', { method: 'DELETE' });
+                        setRzpConfigured(false); setRzpMaskedKey('');
+                        setRzpSuccess('Razorpay keys removed');
+                      } catch (e) { setRzpError(e.message); }
+                    }}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" /> Disconnect Razorpay
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                    <Key className="h-4 w-4 text-amber-600" />
+                    <p className="text-xs text-amber-700">Get your API keys from the <a href="https://dashboard.razorpay.com/app/keys" target="_blank" rel="noreferrer" className="underline font-medium">Razorpay Dashboard</a></p>
+                  </div>
+                  <div className="grid gap-3">
+                    <div className="grid gap-2">
+                      <Label htmlFor="rzp-key-id">Key ID</Label>
+                      <Input id="rzp-key-id" placeholder="rzp_test_..." value={rzpKeyId} onChange={e => setRzpKeyId(e.target.value)} className="font-mono text-sm" />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="rzp-key-secret">Key Secret</Label>
+                      <Input id="rzp-key-secret" type="password" placeholder="Your Razorpay secret key" value={rzpKeySecret} onChange={e => setRzpKeySecret(e.target.value)} className="font-mono text-sm" />
+                    </div>
+                  </div>
+                  <Button
+                    disabled={rzpSaving || !rzpKeyId.trim() || !rzpKeySecret.trim()}
+                    onClick={async () => {
+                      setRzpSaving(true); setRzpError(''); setRzpSuccess('');
+                      try {
+                        const res = await api('/razorpay/keys', { method: 'POST', body: { key_id: rzpKeyId, key_secret: rzpKeySecret } });
+                        setRzpConfigured(true);
+                        setRzpMaskedKey(res.key_id.substring(0, 12) + '...');
+                        setRzpKeyId(''); setRzpKeySecret('');
+                        setRzpSuccess('Razorpay connected successfully!');
+                      } catch (e) { setRzpError(e.message); }
+                      finally { setRzpSaving(false); }
+                    }}
+                  >
+                    <Shield className="mr-2 h-4 w-4" />
+                    {rzpSaving ? 'Saving…' : 'Connect Razorpay'}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

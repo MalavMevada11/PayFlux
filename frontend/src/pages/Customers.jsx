@@ -7,7 +7,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
-import { Users, Plus, Pencil, Trash2 } from 'lucide-react';
+import { Users, Plus, Pencil, Trash2, Link2, Copy, Check } from 'lucide-react';
 
 function getInitials(name) {
   return (name || '?').split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
@@ -23,6 +23,19 @@ export default function Customers() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  // Invite code state
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
+
+  // Link by code state
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkCode, setLinkCode] = useState('');
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [linkError, setLinkError] = useState('');
+  const [linkSuccess, setLinkSuccess] = useState('');
 
   useEffect(() => {
     load();
@@ -91,6 +104,46 @@ export default function Customers() {
     }
   }
 
+  // Generate an invite code to share with a customer
+  async function handleGenerateInvite() {
+    setInviteLoading(true);
+    try {
+      const res = await api('/links/company-code', { method: 'POST' });
+      setInviteCode(res.code);
+      setCodeCopied(false);
+    } catch (err) {
+      setInviteCode('');
+      alert(err.message);
+    } finally {
+      setInviteLoading(false);
+    }
+  }
+
+  function copyCode() {
+    navigator.clipboard.writeText(inviteCode);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 2000);
+  }
+
+  // Link a customer using their invite code
+  async function handleLinkByCode() {
+    if (!linkCode.trim()) return;
+    setLinkLoading(true);
+    setLinkError('');
+    setLinkSuccess('');
+    try {
+      await api('/links/connect', { method: 'POST', body: { code: linkCode.trim() } });
+      setLinkSuccess('Customer linked and added to your list!');
+      setLinkCode('');
+      load(); // Refresh customer list
+      setTimeout(() => { setLinkDialogOpen(false); setLinkSuccess(''); }, 1500);
+    } catch (err) {
+      setLinkError(err.message);
+    } finally {
+      setLinkLoading(false);
+    }
+  }
+
   const f = (field) => ({
     value: form[field] ?? '',
     onChange: (e) => setForm((prev) => ({ ...prev, [field]: e.target.value })),
@@ -103,11 +156,78 @@ export default function Customers() {
           <h1 className="text-3xl font-bold tracking-tight">Customers</h1>
           <p className="text-muted-foreground mt-1">{rows.length} customer{rows.length !== 1 ? 's' : ''}</p>
         </div>
-        <Button onClick={startNew}>
-          <Plus className="mr-2 h-4 w-4" />
-          <span>Add Customer</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => { setLinkCode(''); setLinkError(''); setLinkSuccess(''); setLinkDialogOpen(true); }}>
+            <Link2 className="mr-2 h-4 w-4" />
+            <span>Link by Code</span>
+          </Button>
+          <Button variant="outline" onClick={() => { setInviteCode(''); setInviteDialogOpen(true); }}>
+            <Copy className="mr-2 h-4 w-4" />
+            <span>Invite Customer</span>
+          </Button>
+          <Button onClick={startNew}>
+            <Plus className="mr-2 h-4 w-4" />
+            <span>Add Customer</span>
+          </Button>
+        </div>
       </div>
+
+      {/* Invite Customer Dialog */}
+      <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Invite Customer</DialogTitle>
+          </DialogHeader>
+          <div className="px-6 pb-2 space-y-4">
+            <p className="text-sm text-muted-foreground">Generate a one-time invite code and share it with your customer. They can use it to link their account to your business.</p>
+            {inviteCode ? (
+              <div className="flex items-center gap-3 p-4 rounded-lg border bg-secondary/30">
+                <span className="font-mono text-lg font-bold tracking-widest flex-1">{inviteCode}</span>
+                <Button variant="outline" size="sm" onClick={copyCode} className="gap-1.5">
+                  {codeCopied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                  {codeCopied ? 'Copied!' : 'Copy'}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setInviteDialogOpen(false)}>Close</Button>
+            <Button onClick={handleGenerateInvite} disabled={inviteLoading}>
+              {inviteLoading ? 'Generating...' : inviteCode ? 'Generate New' : 'Generate Code'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Link by Code Dialog */}
+      <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Link Customer by Code</DialogTitle>
+          </DialogHeader>
+          <div className="px-6 pb-2 space-y-4">
+            <p className="text-sm text-muted-foreground">Enter a customer's invite code to link their account. They'll be automatically added to your customers list.</p>
+            {linkError && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">{linkError}</div>}
+            {linkSuccess && <div className="rounded-md bg-green-50 p-3 text-sm text-green-700 border border-green-200">{linkSuccess}</div>}
+            <div className="space-y-2">
+              <Label>Customer Code</Label>
+              <Input
+                placeholder="Enter code (e.g. A1B2C3D4)"
+                value={linkCode}
+                onChange={(e) => setLinkCode(e.target.value.toUpperCase())}
+                className="font-mono tracking-wider"
+                maxLength={12}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setLinkDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleLinkByCode} disabled={linkLoading || !linkCode.trim()}>
+              {linkLoading ? 'Linking...' : 'Link Customer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal Dialog for New/Edit Customer */}
       <Dialog open={dialogOpen} onOpenChange={cancelEdit}>

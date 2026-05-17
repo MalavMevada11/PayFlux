@@ -161,8 +161,10 @@ PROJECT_RULES.md          # ← This file (canonical rules)
 GSD-STYLE.md              # Style and conventions
 
 .agent/
-├── workflows/            # Slash commands (/plan, /execute, etc.)
-└── skills/               # Agent specializations
+└── workflows/            # Slash commands (/plan, /execute, etc.)
+
+.agents/
+└── skills/               # Agent specializations (Agent Skills standard)
 
 .gemini/                  # Gemini-specific configuration
 .gsd/                     # Project state and artifacts

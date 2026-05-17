@@ -16,13 +16,30 @@ import ItemDetail from './pages/ItemDetail';
 import LandingPage from './pages/LandingPage';
 
 
-function PrivateLayout({ children }) {
-  const { user, isAuthenticated, logout } = useAuth();
+// Admin pages
+import AdminLayout from './components/AdminLayout';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminUsers from './pages/admin/AdminUsers';
+import AdminBusinesses from './pages/admin/AdminBusinesses';
+import AdminPayments from './pages/admin/AdminPayments';
+
+// Customer portal pages
+import CustomerLayout from './components/CustomerLayout';
+import PortalDashboard from './pages/portal/PortalDashboard';
+import PortalInvoices from './pages/portal/PortalInvoices';
+import PortalInvoiceDetail from './pages/portal/PortalInvoiceDetail';
+import PortalPayments from './pages/portal/PortalPayments';
+
+
+function BusinessLayout({ children }) {
+  const { user, isAuthenticated, isBusiness, isAdmin, logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const nav = useNavigate();
   
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  // Only business (and admin) can use the business layout
+  if (!isBusiness && !isAdmin) return <Navigate to="/" replace />;
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
@@ -107,7 +124,7 @@ function PrivateLayout({ children }) {
                 </div>
                 <div className="hidden sm:flex flex-col">
                   <span className="text-sm font-semibold leading-none text-foreground">{user?.first_name ? `${user.first_name}${user.last_name ? ' ' + user.last_name : ''}` : (user?.email?.split('@')[0] || 'User')}</span>
-                  <span className="text-[10px] text-muted-foreground leading-snug mt-0.5 font-medium">Administrator</span>
+                  <span className="text-[10px] text-muted-foreground leading-snug mt-0.5 font-medium">Business</span>
                 </div>
               </button>
               
@@ -149,26 +166,59 @@ function PrivateLayout({ children }) {
   );
 }
 
+/**
+ * Determines the default redirect path based on user role.
+ */
+function RoleRedirect() {
+  const { isAuthenticated, isAdmin, isCustomer } = useAuth();
+  if (!isAuthenticated) return <LandingPage />;
+  if (isAdmin) return <Navigate to="/admin" replace />;
+  if (isCustomer) return <Navigate to="/portal" replace />;
+  return <Navigate to="/dashboard" replace />;
+}
+
 export default function App() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isAdmin, isBusiness, isCustomer } = useAuth();
+
+  // Determine where login should redirect
+  const loginRedirect = isAdmin ? '/admin' : isCustomer ? '/portal' : '/dashboard';
+
   return (
     <Routes>
-      <Route path="/login"    element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
-      <Route path="/register" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />} />
+      {/* Public routes */}
+      <Route path="/login"    element={isAuthenticated ? <Navigate to={loginRedirect} replace /> : <Login />} />
+      <Route path="/register" element={isAuthenticated ? <Navigate to={loginRedirect} replace /> : <Register />} />
+      <Route path="/" element={<RoleRedirect />} />
 
-      <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
-      <Route path="/dashboard" element={<PrivateLayout><Dashboard /></PrivateLayout>} />
-      <Route path="/invoices" element={<PrivateLayout><Invoices /></PrivateLayout>} />
-      <Route path="/invoices/create" element={<PrivateLayout><InvoiceBuilder /></PrivateLayout>} />
+      {/* ── Admin routes ── */}
+      <Route path="/admin" element={<AdminLayout><AdminDashboard /></AdminLayout>} />
+      <Route path="/admin/users" element={<AdminLayout><AdminUsers /></AdminLayout>} />
+      <Route path="/admin/businesses" element={<AdminLayout><AdminBusinesses /></AdminLayout>} />
+      <Route path="/admin/payments" element={<AdminLayout><AdminPayments /></AdminLayout>} />
+
+      {/* ── Business routes (current functionality) ── */}
+      <Route path="/dashboard" element={<BusinessLayout><Dashboard /></BusinessLayout>} />
+      <Route path="/invoices" element={<BusinessLayout><Invoices /></BusinessLayout>} />
+      <Route path="/invoices/create" element={<BusinessLayout><InvoiceBuilder /></BusinessLayout>} />
       <Route path="/invoices/new" element={<Navigate to="/invoices/create" replace />} />
-      <Route path="/customers" element={<PrivateLayout><Customers /></PrivateLayout>} />
-      <Route path="/customers/:id" element={<PrivateLayout><CustomerDetail /></PrivateLayout>} />
-      <Route path="/items" element={<PrivateLayout><Items /></PrivateLayout>} />
-      <Route path="/items/:id" element={<PrivateLayout><ItemDetail /></PrivateLayout>} />
-      <Route path="/invoices/:id" element={<PrivateLayout><InvoiceDetail /></PrivateLayout>} />
-      <Route path="/invoices/:id/edit" element={<PrivateLayout><InvoiceBuilder /></PrivateLayout>} />
-      <Route path="/profile" element={<PrivateLayout><Profile /></PrivateLayout>} />
-      <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/"} replace />} />
+      <Route path="/customers" element={<BusinessLayout><Customers /></BusinessLayout>} />
+      <Route path="/customers/:id" element={<BusinessLayout><CustomerDetail /></BusinessLayout>} />
+      <Route path="/items" element={<BusinessLayout><Items /></BusinessLayout>} />
+      <Route path="/items/:id" element={<BusinessLayout><ItemDetail /></BusinessLayout>} />
+      <Route path="/invoices/:id" element={<BusinessLayout><InvoiceDetail /></BusinessLayout>} />
+      <Route path="/invoices/:id/edit" element={<BusinessLayout><InvoiceBuilder /></BusinessLayout>} />
+      <Route path="/profile" element={<BusinessLayout><Profile /></BusinessLayout>} />
+
+      {/* ── Customer portal routes ── */}
+      <Route path="/portal" element={<CustomerLayout><PortalDashboard /></CustomerLayout>} />
+      <Route path="/portal/businesses" element={<CustomerLayout><PortalDashboard /></CustomerLayout>} />
+      <Route path="/portal/invoices" element={<CustomerLayout><PortalInvoices /></CustomerLayout>} />
+      <Route path="/portal/invoices/:id" element={<CustomerLayout><PortalInvoiceDetail /></CustomerLayout>} />
+      <Route path="/portal/payments" element={<CustomerLayout><PortalPayments /></CustomerLayout>} />
+      <Route path="/portal/settings" element={<CustomerLayout><div className="text-center py-16 text-muted-foreground">Customer settings coming soon</div></CustomerLayout>} />
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to={isAuthenticated ? loginRedirect : "/"} replace />} />
     </Routes>
   );
 }

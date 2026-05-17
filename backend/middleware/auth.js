@@ -14,6 +14,7 @@ function authMiddleware(req, res, next) {
       return res.status(401).json({ error: 'Invalid token payload' });
     }
     req.userId = payload.userId;
+    req.userRole = payload.role || 'business';
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' });
