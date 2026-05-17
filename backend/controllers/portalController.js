@@ -1,4 +1,8 @@
 const { pool } = require('../db');
+const { generatePdf } = require('../browserPool');
+
+// Import the shared HTML builder from invoiceController
+const { buildInvoiceHtml } = require('./invoiceController');
 
 function roundMoney(n) {
   return Math.round(n * 100) / 100;
@@ -299,4 +303,142 @@ async function getDashboardStats(req, res) {
   }
 }
 
-module.exports = { getMyInvoices, getInvoiceDetail, getMyPayments, getDashboardStats };
+/**
+ * Generate and download a PDF for a customer-portal invoice.
+ * Verifies customer access via linked businesses.
+ * For fully paid invoices, overlays a "PAID" watermark stamp.
+ */
+async function portalPdf(req, res) {
+  try {
+    const invoiceId = parseInt(req.params.id, 10);
+    if (isNaN(invoiceId)) return res.status(400).json({ error: 'Invalid invoice ID' });
+
+    const { rows: userRows } = await pool.query(
+      'SELECT email FROM users WHERE id = $1', [req.userId]
+    );
+    if (userRows.length === 0) return res.status(404).json({ error: 'User not found' });
+    const customerEmail = userRows[0].email;
+
+    // Get invoice
+    const { rows: invRows } = await pool.query('SELECT * FROM invoices WHERE id = $1', [invoiceId]);
+    if (invRows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
+    const inv = invRows[0];
+
+    // Check: invoice must belong to a linked business
+    const { rows: linkCheck } = await pool.query(
+      `SELECT id FROM customer_links 
+       WHERE customer_user_id = $1 AND business_user_id = $2 AND status = 'active'`,
+      [req.userId, inv.user_id]
+    );
+    if (linkCheck.length === 0) {
+      return res.status(403).json({ error: 'Not authorized to view this invoice' });
+    }
+
+    // Check: customer email matches the invoice's customer record
+    const { rows: custRows } = await pool.query(
+      'SELECT * FROM customers WHERE id = $1', [inv.customer_id]
+    );
+    const customer = custRows[0] || {};
+    if (customer.email && customer.email.toLowerCase() !== customerEmail.toLowerCase()) {
+      return res.status(403).json({ error: 'Not authorized to view this invoice' });
+    }
+
+    // Don't allow draft downloads
+    if (inv.status === 'draft') {
+      return res.status(403).json({ error: 'This invoice is not yet available' });
+    }
+
+    // Get line items
+    const { rows: lines } = await pool.query(
+      'SELECT * FROM invoice_items WHERE invoice_id = $1 ORDER BY id ASC', [invoiceId]
+    );
+
+    // Get taxes
+    const { rows: taxRows } = await pool.query(
+      'SELECT * FROM invoice_taxes WHERE invoice_id = $1 ORDER BY id ASC', [invoiceId]
+    );
+
+    // Get payments
+    const { rows: payments } = await pool.query(
+      'SELECT * FROM payments WHERE invoice_id = $1 ORDER BY date ASC, id ASC', [invoiceId]
+    );
+    const totalPaid = roundMoney(payments.reduce((s, p) => s + parseFloat(p.amount), 0));
+    const remaining = roundMoney(parseFloat(inv.total) - totalPaid);
+
+    // Get business settings (for display)
+    const { rows: settingsRows } = await pool.query(
+      'SELECT * FROM user_settings WHERE user_id = $1', [inv.user_id]
+    );
+    const settings = settingsRows[0] || {};
+
+    const fullInvoice = {
+      ...inv,
+      items: lines,
+      taxes: taxRows,
+      customer,
+      payments,
+      totalPaid,
+      remaining,
+    };
+
+    // Generate the base HTML
+    let html = buildInvoiceHtml(fullInvoice, settings);
+
+    // If fully paid, inject a "PAID" watermark stamp overlay
+    if (inv.status === 'paid') {
+      const paidWatermark = `
+        <style>
+          .paid-watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-35deg);
+            z-index: 9999;
+            pointer-events: none;
+          }
+          .paid-stamp {
+            border: 6px solid rgba(5, 150, 105, 0.35);
+            border-radius: 20px;
+            padding: 15px 50px;
+            font-family: 'Helvetica', Arial, sans-serif;
+            font-size: 80px;
+            font-weight: 900;
+            color: rgba(5, 150, 105, 0.35);
+            letter-spacing: 12px;
+            text-transform: uppercase;
+            text-align: center;
+            line-height: 1;
+          }
+          .paid-date {
+            text-align: center;
+            font-family: 'Helvetica', Arial, sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+            color: rgba(5, 150, 105, 0.35);
+            margin-top: 4px;
+            letter-spacing: 2px;
+          }
+        </style>
+        <div class="paid-watermark">
+          <div class="paid-stamp">PAID</div>
+          <div class="paid-date">PAYMENT RECEIVED</div>
+        </div>
+      `;
+      // Inject right after <body>
+      html = html.replace('<body>', '<body>' + paidWatermark);
+    }
+
+    const buf = await generatePdf(html);
+    const filename = inv.status === 'paid'
+      ? `${inv.invoice_number}-receipt.pdf`
+      : `${inv.invoice_number}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(buf);
+  } catch (err) {
+    console.error('portalController.portalPdf:', err);
+    return res.status(500).json({ error: 'Failed to generate PDF' });
+  }
+}
+
+module.exports = { getMyInvoices, getInvoiceDetail, getMyPayments, getDashboardStats, portalPdf };

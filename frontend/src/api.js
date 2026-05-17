@@ -41,6 +41,26 @@ export async function downloadPdf(invoiceId, filename) {
   URL.revokeObjectURL(url);
 }
 
+export async function downloadPortalPdf(invoiceId, filename) {
+  const token = getToken();
+  const res = await fetch(`${BASE}/portal/invoices/${invoiceId}/pdf`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'PDF generation failed');
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename || `${invoiceId}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function previewHtml(formData) {
   const token = getToken();
   const res = await fetch(`${BASE}/invoices/preview-html`, {

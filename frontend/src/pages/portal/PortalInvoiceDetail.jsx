@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api, downloadPdf } from '../../api';
+import { api, downloadPortalPdf } from '../../api';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
@@ -54,9 +54,10 @@ export default function PortalInvoiceDetail() {
   async function handleDownloadPdf() {
     setDownloading(true);
     try {
-      await downloadPdf(id, `${inv?.invoice_number || 'invoice'}.pdf`);
+      const suffix = inv?.status === 'paid' ? '-receipt' : '';
+      await downloadPortalPdf(id, `${inv?.invoice_number || 'invoice'}${suffix}.pdf`);
     } catch (err) {
-      alert('PDF download is not available for portal users yet.');
+      alert(err.message || 'Failed to download PDF');
     } finally {
       setDownloading(false);
     }
@@ -223,8 +224,8 @@ export default function PortalInvoiceDetail() {
       </Card>
 
       {/* Pay Now + Download */}
-      {inv.remaining > 0 && inv.status !== 'paid' && (
-        <div className="flex gap-2">
+      <div className="flex gap-2">
+        {inv.remaining > 0 && inv.status !== 'paid' && (
           <Button
             className="flex-1 bg-emerald-600 hover:bg-emerald-700 gap-1.5"
             disabled={paying}
@@ -233,21 +234,23 @@ export default function PortalInvoiceDetail() {
             <CreditCard className="h-4 w-4" />
             {paying ? 'Processing…' : `Pay ${inr(inv.remaining)}`}
           </Button>
-          <Button variant="outline" onClick={handleDownloadPdf} disabled={downloading} className="gap-1.5">
-            <Download className="h-4 w-4" />
-            {downloading ? 'Downloading…' : 'PDF'}
-          </Button>
-        </div>
-      )}
+        )}
+        <Button
+          variant={inv.status === 'paid' ? 'default' : 'outline'}
+          onClick={handleDownloadPdf}
+          disabled={downloading}
+          className={`gap-1.5 ${inv.status === 'paid' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
+        >
+          <Download className="h-4 w-4" />
+          {downloading
+            ? 'Downloading…'
+            : inv.status === 'paid'
+              ? 'Download Receipt'
+              : 'Download Invoice'}
+        </Button>
+      </div>
       {payError && <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">{payError}</div>}
       {paySuccess && <div className="rounded-md bg-green-50 border border-green-200 p-4 text-sm text-green-700">{paySuccess}</div>}
-
-      {inv.status === 'paid' && (
-        <Button variant="outline" onClick={handleDownloadPdf} disabled={downloading} className="gap-1.5">
-          <Download className="h-4 w-4" />
-          {downloading ? 'Downloading…' : 'Download Receipt PDF'}
-        </Button>
-      )}
 
       {/* Invoice Details */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, useScroll, useTransform, useInView } from 'framer-motion';
+import { motion, useScroll, useTransform, useInView, AnimatePresence } from 'framer-motion';
 import {
   FileText, Zap, Shield, BarChart3, ArrowRight, CheckCircle2,
   Sparkles, Send, CreditCard, Star, ChevronRight, Layers,
-  Globe, Clock, Users
+  Globe, Clock, Users, Building2, UserCircle, Lock, Download,
+  IndianRupee, Eye, ArrowLeftRight
 } from 'lucide-react';
 
 /* ─── Animation helpers ──────────────────────────────────────────────── */
@@ -129,9 +130,9 @@ function Hero() {
         <div className="text-center max-w-4xl mx-auto">
           {/* Badge */}
           <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={0}>
-            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-sm font-medium mb-8">
-              <Sparkles className="h-3.5 w-3.5" />
-              Invoicing, simplified beautifully
+            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-sm font-medium mb-8 animate-pulse-glow">
+              <Sparkles className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: '3s' }} />
+              Two Portals · Razorpay Payments · Instant PDFs
             </span>
           </motion.div>
 
@@ -143,10 +144,10 @@ function Hero() {
             custom={1}
             className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight leading-[1.08] mb-6"
           >
-            <span className="text-slate-900">Get paid faster.</span>
+            <span className="text-slate-900">One platform.</span>
             <br />
-            <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent bg-[length:200%_auto] animate-gradient">
-              Stress less.
+            <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-emerald-500 bg-clip-text text-transparent bg-[length:200%_auto] animate-gradient">
+              Two powerful portals.
             </span>
           </motion.h1>
 
@@ -158,8 +159,8 @@ function Hero() {
             custom={2}
             className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto mb-10 leading-relaxed"
           >
-            Create stunning invoices in seconds, track payments effortlessly,
-            and watch your cash flow thrive — all from one beautiful dashboard.
+            Businesses create & send invoices. Customers view, pay via Razorpay, and download receipts.
+            Role-based access keeps everything secure and seamless.
           </motion.p>
 
           {/* CTAs */}
@@ -174,15 +175,16 @@ function Hero() {
               to="/register"
               className="group inline-flex items-center gap-2 text-base font-semibold text-white bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 px-8 py-4 rounded-2xl shadow-xl shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all duration-300 hover:-translate-y-0.5"
             >
-              Start for Free
-              <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+              Start as Business
+              <Building2 className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
             </Link>
-            <a
-              href="#how-it-works"
-              className="inline-flex items-center gap-2 text-base font-semibold text-slate-600 hover:text-slate-900 px-8 py-4 rounded-2xl border border-slate-200 hover:border-slate-300 bg-white/50 hover:bg-white transition-all duration-200"
+            <Link
+              to="/register"
+              className="group inline-flex items-center gap-2 text-base font-semibold text-slate-700 hover:text-slate-900 px-8 py-4 rounded-2xl border border-slate-200 hover:border-emerald-300 bg-white/50 hover:bg-emerald-50/50 transition-all duration-200 hover:-translate-y-0.5"
             >
-              See How it Works
-            </a>
+              Join as Customer
+              <UserCircle className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+            </Link>
           </motion.div>
 
           {/* Trust line */}
@@ -191,11 +193,11 @@ function Hero() {
             initial="hidden"
             animate="visible"
             custom={4}
-            className="text-sm text-slate-400 mt-8 flex items-center justify-center gap-4"
+            className="text-sm text-slate-400 mt-8 flex items-center justify-center gap-4 flex-wrap"
           >
-            <span className="flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> Free forever plan</span>
-            <span className="flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> No credit card</span>
-            <span className="flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> Setup in 60 seconds</span>
+            <span className="flex items-center gap-1"><Lock className="h-3.5 w-3.5 text-emerald-500" /> Role-based access</span>
+            <span className="flex items-center gap-1"><IndianRupee className="h-3.5 w-3.5 text-emerald-500" /> Razorpay integrated</span>
+            <span className="flex items-center gap-1"><Download className="h-3.5 w-3.5 text-emerald-500" /> PAID receipt PDFs</span>
           </motion.p>
         </div>
 
@@ -232,41 +234,63 @@ function Hero() {
 
           {/* Floating cards */}
           <motion.div
-            animate={{ y: [0, -8, 0] }}
-            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute -left-6 top-1/3 hidden lg:block"
+            animate={{ y: [0, -12, 0], rotate: [0, -2, 0] }}
+            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+            className="absolute -left-6 top-1/4 hidden lg:block"
           >
-            <div className="bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-4 w-52">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="h-9 w-9 rounded-xl bg-emerald-50 flex items-center justify-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+            <div className="bg-white rounded-2xl shadow-xl shadow-indigo-900/10 border border-indigo-100 p-4 w-56 animate-pulse-glow">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-9 w-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+                  <Building2 className="h-5 w-5 text-indigo-500" />
                 </div>
                 <div>
-                  <div className="text-xs text-slate-400 font-medium">Payment Received</div>
-                  <div className="text-sm font-bold text-slate-900">₹24,500.00</div>
+                  <div className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Business Portal</div>
+                  <div className="text-sm font-bold text-slate-900">Create & Send</div>
                 </div>
               </div>
-              <div className="h-1.5 bg-emerald-100 rounded-full overflow-hidden">
-                <div className="h-full w-full bg-emerald-500 rounded-full" />
+              <div className="flex gap-1.5">
+                {['Invoice', 'PDF', 'Track'].map(t => (
+                  <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 font-medium">{t}</span>
+                ))}
               </div>
             </div>
           </motion.div>
 
           <motion.div
-            animate={{ y: [0, 10, 0] }}
-            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-            className="absolute -right-6 top-1/4 hidden lg:block"
+            animate={{ y: [0, 10, 0], rotate: [0, 2, 0] }}
+            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+            className="absolute -right-6 top-1/5 hidden lg:block"
           >
-            <div className="bg-white rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-100 p-4 w-48">
-              <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-xl bg-indigo-50 flex items-center justify-center">
-                  <Zap className="h-5 w-5 text-indigo-500" />
+            <div className="bg-white rounded-2xl shadow-xl shadow-emerald-900/10 border border-emerald-100 p-4 w-56">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-9 w-9 rounded-xl bg-emerald-50 flex items-center justify-center">
+                  <UserCircle className="h-5 w-5 text-emerald-500" />
                 </div>
                 <div>
-                  <div className="text-xs text-slate-400 font-medium">Invoices Sent</div>
-                  <div className="text-lg font-bold text-slate-900">147</div>
+                  <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Customer Portal</div>
+                  <div className="text-sm font-bold text-slate-900">View & Pay</div>
                 </div>
               </div>
+              <div className="flex gap-1.5">
+                {['Razorpay', 'Receipt', 'History'].map(t => (
+                  <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 font-medium">{t}</span>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div
+            animate={{ y: [0, -6, 0], scale: [1, 1.02, 1] }}
+            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', delay: 1.5 }}
+            className="absolute -right-4 bottom-1/4 hidden lg:block"
+          >
+            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl shadow-xl shadow-emerald-500/20 p-3 w-48 text-white">
+              <div className="flex items-center gap-2 mb-1">
+                <CheckCircle2 className="h-4 w-4" />
+                <span className="text-xs font-bold">Payment Received!</span>
+              </div>
+              <div className="text-lg font-extrabold">₹24,500.00</div>
+              <div className="text-[10px] opacity-75 mt-0.5">via Razorpay • just now</div>
             </div>
           </motion.div>
         </motion.div>
@@ -279,36 +303,52 @@ function Hero() {
 
 const FEATURES = [
   {
-    icon: FileText,
-    title: 'Professional Invoices',
-    desc: 'Create GST-compliant invoices with your branding, logo, and custom terms — in under a minute.',
-    color: 'indigo',
+    icon: Building2,
+    title: 'Business Portal',
+    desc: 'Full dashboard to create invoices, manage customers & items, track revenue, and generate pixel-perfect PDFs.',
     gradient: 'from-indigo-500 to-blue-500',
     light: 'bg-indigo-50',
+    iconColor: 'text-indigo-500',
   },
   {
-    icon: Zap,
-    title: 'Instant PDF Generation',
-    desc: 'One click to generate, download, or email pixel-perfect PDF invoices. No waiting, no hassle.',
-    color: 'amber',
+    icon: UserCircle,
+    title: 'Customer Portal',
+    desc: 'Customers log in to view invoices, check payment history, and download receipts — all in a dedicated portal.',
+    gradient: 'from-emerald-500 to-teal-500',
+    light: 'bg-emerald-50',
+    iconColor: 'text-emerald-500',
+  },
+  {
+    icon: CreditCard,
+    title: 'Razorpay Payments',
+    desc: 'Customers pay invoices directly with Razorpay Checkout. Payments auto-verify and update invoice status instantly.',
+    gradient: 'from-blue-500 to-cyan-500',
+    light: 'bg-blue-50',
+    iconColor: 'text-blue-500',
+  },
+  {
+    icon: Download,
+    title: 'PAID Receipt PDFs',
+    desc: 'Fully paid invoices generate receipt PDFs with a professional "PAID" watermark stamp. Download anytime.',
+    gradient: 'from-purple-500 to-pink-500',
+    light: 'bg-purple-50',
+    iconColor: 'text-purple-500',
+  },
+  {
+    icon: Lock,
+    title: 'Role-Based Access',
+    desc: 'Admin, Business, and Customer roles with strict RBAC. Each role sees only what they should — nothing more.',
     gradient: 'from-amber-500 to-orange-500',
     light: 'bg-amber-50',
+    iconColor: 'text-amber-500',
   },
   {
     icon: BarChart3,
     title: 'Real-time Analytics',
-    desc: 'Track revenue, outstanding payments, and customer insights with beautiful interactive dashboards.',
-    color: 'emerald',
-    gradient: 'from-emerald-500 to-teal-500',
-    light: 'bg-emerald-50',
-  },
-  {
-    icon: Shield,
-    title: 'Payment Tracking',
-    desc: 'Record partial payments, auto-update statuses, and never lose track of who owes what.',
-    color: 'purple',
-    gradient: 'from-purple-500 to-pink-500',
-    light: 'bg-purple-50',
+    desc: 'Revenue trends, top customers, payment breakdowns, and overdue tracking — all in beautiful interactive charts.',
+    gradient: 'from-rose-500 to-red-500',
+    light: 'bg-rose-50',
+    iconColor: 'text-rose-500',
   },
 ];
 
@@ -316,31 +356,40 @@ function Features() {
   return (
     <SectionWrapper id="features" className="py-24 md:py-32">
       <div className="max-w-7xl mx-auto px-6">
-        <motion.div variants={fadeUp} className="text-center max-w-2xl mx-auto mb-16">
+        {/* Morphing blob background */}
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-br from-indigo-100 via-purple-100 to-emerald-100 opacity-30 blur-3xl animate-morph pointer-events-none" />
+
+        <motion.div variants={fadeUp} className="text-center max-w-2xl mx-auto mb-16 relative">
           <span className="text-sm font-semibold text-indigo-600 tracking-wide uppercase mb-3 block">Features</span>
           <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight mb-4">
-            Everything you need to get paid
+            Built for both sides of the invoice
           </h2>
           <p className="text-lg text-slate-500">
-            From creation to collection — PayFlux handles your entire invoicing workflow with elegance.
+            Two dedicated portals. One seamless payment flow. Zero friction.
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 relative">
           {FEATURES.map((f, i) => (
             <motion.div
               key={f.title}
               variants={fadeUp}
               custom={i}
-              className="group relative bg-white rounded-2xl border border-slate-100 p-8 hover:shadow-xl hover:shadow-slate-900/5 transition-all duration-300 hover:-translate-y-1 overflow-hidden"
+              whileHover={{ y: -8, scale: 1.02 }}
+              className="group relative bg-white rounded-2xl border border-slate-100 p-8 hover:shadow-2xl hover:shadow-slate-900/8 transition-all duration-500 overflow-hidden"
             >
-              {/* Subtle gradient background on hover */}
-              <div className={`absolute inset-0 bg-gradient-to-br ${f.gradient} opacity-0 group-hover:opacity-[0.03] transition-opacity duration-300`} />
+              {/* Gradient sweep on hover */}
+              <div className={`absolute inset-0 bg-gradient-to-br ${f.gradient} opacity-0 group-hover:opacity-[0.04] transition-opacity duration-500`} />
+              <div className={`absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br ${f.gradient} opacity-0 group-hover:opacity-10 rounded-full blur-2xl transition-all duration-500 group-hover:scale-150`} />
 
               <div className="relative">
-                <div className={`h-12 w-12 rounded-2xl ${f.light} flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300`}>
-                  <f.icon className={`h-6 w-6 text-${f.color}-500`} />
-                </div>
+                <motion.div
+                  whileHover={{ rotate: [0, -10, 10, 0], scale: 1.1 }}
+                  transition={{ duration: 0.5 }}
+                  className={`h-12 w-12 rounded-2xl ${f.light} flex items-center justify-center mb-5`}
+                >
+                  <f.icon className={`h-6 w-6 ${f.iconColor}`} />
+                </motion.div>
                 <h3 className="text-xl font-bold text-slate-900 mb-2">{f.title}</h3>
                 <p className="text-slate-500 leading-relaxed">{f.desc}</p>
               </div>
@@ -355,50 +404,170 @@ function Features() {
 /* ─── Screenshot / Demo Section ──────────────────────────────────────── */
 
 function DemoSection() {
+  const [activePortal, setActivePortal] = useState('business');
+  const [autoSwitch, setAutoSwitch] = useState(true);
+
+  useEffect(() => {
+    if (!autoSwitch) return;
+    const timer = setInterval(() => {
+      setActivePortal(p => p === 'business' ? 'customer' : 'business');
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [autoSwitch]);
+
+  const portals = {
+    business: {
+      icon: Building2,
+      title: 'Business Portal',
+      subtitle: 'Create, manage, and track everything',
+      color: 'indigo',
+      features: [
+        { icon: FileText, text: 'Create GST-compliant invoices with live preview' },
+        { icon: Users, text: 'Manage customer & item catalogs' },
+        { icon: Zap, text: 'Generate pixel-perfect PDFs in one click' },
+        { icon: BarChart3, text: 'Revenue analytics & payment dashboards' },
+        { icon: Send, text: 'Send invoices & track payment status' },
+        { icon: Shield, text: 'Configure Razorpay API keys securely' },
+      ],
+    },
+    customer: {
+      icon: UserCircle,
+      title: 'Customer Portal',
+      subtitle: 'View, pay, and download receipts',
+      color: 'emerald',
+      features: [
+        { icon: Eye, text: 'View all invoices from linked businesses' },
+        { icon: CreditCard, text: 'Pay instantly via Razorpay Checkout' },
+        { icon: Download, text: 'Download invoices & PAID receipt PDFs' },
+        { icon: Clock, text: 'Full payment history & transaction log' },
+        { icon: ArrowLeftRight, text: 'Link/unlink with multiple businesses' },
+        { icon: Lock, text: 'Secure role-based access control' },
+      ],
+    },
+  };
+
+  const p = portals[activePortal];
+
   return (
-    <SectionWrapper className="py-24 md:py-32 bg-gradient-to-b from-slate-50 to-white">
+    <SectionWrapper className="py-24 md:py-32 bg-gradient-to-b from-slate-50 to-white overflow-hidden">
       <div className="max-w-7xl mx-auto px-6">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
-          {/* Left text */}
-          <motion.div variants={fadeUp}>
-            <span className="text-sm font-semibold text-indigo-600 tracking-wide uppercase mb-3 block">Powerful & Simple</span>
-            <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight mb-6">
-              A dashboard that feels like magic
-            </h2>
-            <p className="text-lg text-slate-500 mb-8 leading-relaxed">
-              See all your invoices, payments, and customer data in one stunning interface.
-              No learning curve — if you can click a button, you can use PayFlux.
-            </p>
+        {/* Morphing blobs */}
+        <div className="absolute right-0 top-0 w-96 h-96 bg-gradient-to-br from-indigo-200 to-purple-200 opacity-20 blur-3xl animate-morph pointer-events-none" />
+        <div className="absolute left-0 bottom-0 w-80 h-80 bg-gradient-to-br from-emerald-200 to-teal-200 opacity-20 blur-3xl animate-morph pointer-events-none" style={{ animationDelay: '4s' }} />
 
-            <div className="space-y-4">
-              {[
-                { icon: Globe, text: 'Multi-currency support with INR as default' },
-                { icon: Clock, text: 'Auto-generated sequential invoice numbers' },
-                { icon: Users, text: 'Customer & item catalog for quick invoicing' },
-                { icon: BarChart3, text: 'Per-customer and per-item revenue analytics' },
-              ].map((item, i) => (
+        <motion.div variants={fadeUp} className="text-center max-w-2xl mx-auto mb-12 relative">
+          <span className="text-sm font-semibold text-indigo-600 tracking-wide uppercase mb-3 block">Dual Portal System</span>
+          <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight mb-4">
+            Two portals. One seamless experience.
+          </h2>
+          <p className="text-lg text-slate-500">
+            Businesses and customers each get their own powerful interface, connected by Razorpay.
+          </p>
+        </motion.div>
+
+        {/* Portal Switcher */}
+        <motion.div variants={fadeUp} className="flex justify-center mb-12">
+          <div className="inline-flex rounded-2xl bg-white border border-slate-200 p-1.5 shadow-lg shadow-slate-900/5">
+            {['business', 'customer'].map(key => (
+              <button
+                key={key}
+                onClick={() => { setActivePortal(key); setAutoSwitch(false); }}
+                className={`relative px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center gap-2 ${
+                  activePortal === key
+                    ? key === 'business'
+                      ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25'
+                      : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {key === 'business' ? <Building2 className="h-4 w-4" /> : <UserCircle className="h-4 w-4" />}
+                {key === 'business' ? 'Business' : 'Customer'}
+              </button>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Portal Content */}
+        <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activePortal}
+              initial={{ opacity: 0, x: -30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 30 }}
+              transition={{ duration: 0.4, ease: 'easeInOut' }}
+            >
+              <div className="flex items-center gap-3 mb-6">
                 <motion.div
-                  key={i}
-                  variants={fadeUp}
-                  custom={i + 1}
-                  className="flex items-center gap-3"
+                  animate={{ rotate: [0, 360] }}
+                  transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+                  className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${
+                    activePortal === 'business' ? 'from-indigo-500 to-purple-600' : 'from-emerald-500 to-teal-500'
+                  } flex items-center justify-center shadow-lg`}
                 >
-                  <div className="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-                    <item.icon className="h-4 w-4 text-indigo-500" />
-                  </div>
-                  <span className="text-slate-700 font-medium">{item.text}</span>
+                  <p.icon className="h-7 w-7 text-white" />
                 </motion.div>
-              ))}
-            </div>
-          </motion.div>
+                <div>
+                  <h3 className="text-2xl font-extrabold text-slate-900">{p.title}</h3>
+                  <p className="text-sm text-slate-500">{p.subtitle}</p>
+                </div>
+              </div>
 
-          {/* Right mockup */}
+              <div className="space-y-3">
+                {p.features.map((f, i) => (
+                  <motion.div
+                    key={f.text}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.08, duration: 0.3 }}
+                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-300 ${
+                      activePortal === 'business'
+                        ? 'border-indigo-100 hover:bg-indigo-50/50 hover:border-indigo-200'
+                        : 'border-emerald-100 hover:bg-emerald-50/50 hover:border-emerald-200'
+                    }`}
+                  >
+                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      activePortal === 'business' ? 'bg-indigo-50' : 'bg-emerald-50'
+                    }`}>
+                      <f.icon className={`h-4 w-4 ${
+                        activePortal === 'business' ? 'text-indigo-500' : 'text-emerald-500'
+                      }`} />
+                    </div>
+                    <span className="text-slate-700 font-medium text-sm">{f.text}</span>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Right: Animated flow visualization */}
           <motion.div variants={scaleUp} className="relative">
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-200/30 via-purple-200/20 to-pink-200/20 rounded-3xl blur-2xl" />
+            <div className={`absolute inset-0 rounded-3xl blur-2xl transition-colors duration-700 ${
+              activePortal === 'business'
+                ? 'bg-gradient-to-br from-indigo-200/30 via-purple-200/20 to-pink-200/20'
+                : 'bg-gradient-to-br from-emerald-200/30 via-teal-200/20 to-cyan-200/20'
+            }`} />
             <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-slate-900/10 border border-slate-200/60 bg-white">
+              <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 border-b border-slate-100">
+                <div className="flex gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-red-400" />
+                  <div className="w-3 h-3 rounded-full bg-amber-400" />
+                  <div className="w-3 h-3 rounded-full bg-emerald-400" />
+                </div>
+                <div className="flex-1 flex justify-center">
+                  <motion.div
+                    key={activePortal + '-url'}
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white rounded-lg px-4 py-1 text-xs text-slate-400 border border-slate-100 font-mono"
+                  >
+                    {activePortal === 'business' ? 'app.payflux.com/dashboard' : 'app.payflux.com/portal'}
+                  </motion.div>
+                </div>
+              </div>
               <img
                 src="/images/dashboard-mockup.png"
-                alt="PayFlux Dashboard Interface"
+                alt={`PayFlux ${p.title} Interface`}
                 className="w-full h-auto"
                 loading="lazy"
               />
@@ -416,23 +585,34 @@ const STEPS = [
   {
     num: '01',
     icon: FileText,
-    title: 'Create Your Invoice',
-    desc: 'Pick a customer, add items from your catalog, apply discounts and taxes. Live preview shows exactly what your client will see.',
+    title: 'Create Invoice',
+    desc: 'Business creates a GST-compliant invoice with live preview, auto-numbering, taxes, and discounts.',
     gradient: 'from-indigo-500 to-blue-500',
+    portal: 'Business',
   },
   {
     num: '02',
     icon: Send,
-    title: 'Send It Off',
-    desc: 'Generate a pixel-perfect PDF and share it instantly. Sequential numbering, GST fields, and custom branding — all handled automatically.',
+    title: 'Send to Customer',
+    desc: 'Generate a pixel-perfect PDF and send it. Customer sees it instantly in their portal — no emails needed.',
     gradient: 'from-purple-500 to-indigo-500',
+    portal: 'Business',
   },
   {
     num: '03',
     icon: CreditCard,
-    title: 'Get Paid',
-    desc: 'Record cash, UPI, bank transfer, or card payments. Track partial payments and let statuses update themselves. You\'re done.',
+    title: 'Pay via Razorpay',
+    desc: 'Customer clicks "Pay Now" — Razorpay Checkout handles UPI, cards, and netbanking. Payment auto-verifies.',
     gradient: 'from-emerald-500 to-teal-500',
+    portal: 'Customer',
+  },
+  {
+    num: '04',
+    icon: Download,
+    title: 'Download Receipt',
+    desc: 'Fully paid? Customer downloads the original invoice PDF with a professional "PAID" watermark stamp.',
+    gradient: 'from-rose-500 to-pink-500',
+    portal: 'Customer',
   },
 ];
 
@@ -443,35 +623,50 @@ function HowItWorks() {
         <motion.div variants={fadeUp} className="text-center max-w-2xl mx-auto mb-16">
           <span className="text-sm font-semibold text-indigo-600 tracking-wide uppercase mb-3 block">How It Works</span>
           <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight mb-4">
-            Three steps. Zero friction.
+            Four steps. Two portals. Zero friction.
           </h2>
           <p className="text-lg text-slate-500">
-            From draft to payment in minutes — not hours.
+            From invoice creation to PAID receipt download — a seamless flow.
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-3 gap-8 relative">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 relative">
           {/* Connector line */}
-          <div className="hidden md:block absolute top-24 left-[20%] right-[20%] h-[2px] bg-gradient-to-r from-indigo-200 via-purple-200 to-emerald-200" />
+          <div className="hidden lg:block absolute top-24 left-[15%] right-[15%] h-[2px] bg-gradient-to-r from-indigo-200 via-purple-200 via-emerald-200 to-rose-200" />
 
           {STEPS.map((step, i) => (
             <motion.div
               key={step.num}
               variants={fadeUp}
               custom={i}
+              whileHover={{ y: -5 }}
               className="relative text-center"
             >
-              {/* Step number circle */}
+              {/* Step icon */}
               <div className="relative mx-auto mb-6">
-                <div className={`h-20 w-20 rounded-3xl bg-gradient-to-br ${step.gradient} flex items-center justify-center mx-auto shadow-lg relative z-10`}>
+                <motion.div
+                  whileHover={{ rotate: 12, scale: 1.1 }}
+                  transition={{ type: 'spring', stiffness: 300 }}
+                  className={`h-20 w-20 rounded-3xl bg-gradient-to-br ${step.gradient} flex items-center justify-center mx-auto shadow-lg relative z-10`}
+                >
                   <step.icon className="h-8 w-8 text-white" />
-                </div>
-                <div className={`absolute -inset-2 rounded-3xl bg-gradient-to-br ${step.gradient} opacity-20 blur-lg`} />
+                </motion.div>
+                <div className={`absolute -inset-2 rounded-3xl bg-gradient-to-br ${step.gradient} opacity-20 blur-lg animate-pulse`} style={{ animationDelay: `${i * 0.5}s` }} />
               </div>
 
-              <div className="text-xs font-bold text-indigo-400 tracking-widest mb-2 uppercase">Step {step.num}</div>
-              <h3 className="text-xl font-bold text-slate-900 mb-3">{step.title}</h3>
-              <p className="text-slate-500 leading-relaxed max-w-xs mx-auto">{step.desc}</p>
+              {/* Portal badge */}
+              <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider mb-2 ${
+                step.portal === 'Business'
+                  ? 'bg-indigo-50 text-indigo-600'
+                  : 'bg-emerald-50 text-emerald-600'
+              }`}>
+                {step.portal === 'Business' ? <Building2 className="h-2.5 w-2.5" /> : <UserCircle className="h-2.5 w-2.5" />}
+                {step.portal}
+              </div>
+
+              <div className="text-xs font-bold text-slate-400 tracking-widest mb-2 uppercase">Step {step.num}</div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">{step.title}</h3>
+              <p className="text-slate-500 leading-relaxed text-sm max-w-xs mx-auto">{step.desc}</p>
             </motion.div>
           ))}
         </div>
@@ -578,24 +773,26 @@ function CtaBanner() {
           <div className="relative px-8 py-16 md:px-16 md:py-20 text-center">
             <motion.div variants={fadeUp}>
               <h2 className="text-3xl md:text-5xl font-extrabold text-white tracking-tight mb-4">
-                Ready to simplify your invoicing?
+                Ready to transform your invoicing?
               </h2>
               <p className="text-indigo-100 text-lg md:text-xl max-w-xl mx-auto mb-10">
-                Join thousands of businesses that use PayFlux to create, send, and track invoices effortlessly.
+                Business or customer — pick your portal and experience seamless invoicing with Razorpay payments.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Link
                   to="/register"
                   className="group inline-flex items-center gap-2 text-base font-semibold bg-white text-indigo-700 hover:bg-indigo-50 px-8 py-4 rounded-2xl shadow-xl transition-all duration-200 hover:-translate-y-0.5"
                 >
-                  Get Started — It's Free
+                  <Building2 className="h-4 w-4" />
+                  Start as Business
                   <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link
-                  to="/login"
-                  className="inline-flex items-center gap-2 text-base font-semibold text-white/90 hover:text-white px-8 py-4 rounded-2xl border border-white/20 hover:border-white/40 transition-all duration-200"
+                  to="/register"
+                  className="inline-flex items-center gap-2 text-base font-semibold text-white/90 hover:text-white px-8 py-4 rounded-2xl border border-white/20 hover:border-white/40 transition-all duration-200 hover:-translate-y-0.5"
                 >
-                  Sign in
+                  <UserCircle className="h-4 w-4" />
+                  Join as Customer
                   <ChevronRight className="h-4 w-4" />
                 </Link>
               </div>

@@ -971,4 +971,4 @@ async function previewHtml(req, res) {
   }
 }
 
-module.exports = { create, list, getOne, update, remove, pdf, previewHtml, getNextNumber };
+module.exports = { create, list, getOne, update, remove, pdf, previewHtml, getNextNumber, buildInvoiceHtml: invoiceHtml };
